@@ -1,5 +1,6 @@
 library(tidyverse)
 library(readr)
+
 # read metadata.csv with only "Sample_ID" and "*_sr" features
 metadata <- read_csv("./metadata.csv") %>% 
   select(Sample_ID,(matches("_sr$")))
@@ -9,24 +10,36 @@ unitigs_azm <- read_table2("azm_sr_gwas_filtered_unitigs.Rtab")
 unitigs_cfx <- read_table2("cfx_sr_gwas_filtered_unitigs.Rtab")
 unitigs_cip <- read_table2("cip_sr_gwas_filtered_unitigs.Rtab")
 
-detach("package:readr", unload = T)
-
-#Function to transpose and create .csv files of unitigs
-unitig_trans <- function(unitig){
-  # requires loads packages necessary for function
-  lapply(c("magrittr", "tidyr", "readr", "stringr"), require, character.only = TRUE)
+#Function to transpose unitigs table, join metadata, then create .csv file
+unitigs <- function(unitig){
   
   # deparse + substitute combo to extract object name
   unitig_name <- deparse(substitute(unitig))
   
-  unitig %>% 
+  '%>%' <- tidyr::'%>%'
+  
+  unitig %>%
+    # transpose
     tidyr::pivot_longer(-pattern_id, "Sample_ID", "value") %>% 
     tidyr::pivot_wider(Sample_ID, pattern_id) %>%
+    # join relevant antibiotic metadata
+    dplyr::inner_join(select(metadata, "Sample_ID", dplyr::matches(stringr::str_extract(unitig_name, "[[:alpha:]]+$"))), by = "Sample_ID") %>% 
+    select('Sample_ID', last_col(), everything()) %>% 
+    drop_na() %>% 
+    # create .csv file
     readr::write_csv(path=paste0('./', stringr::str_extract(unitig_name,"[[:alpha:]]+[_][[:alpha:]]+"), '.csv'))
 }
 
-# # Transpose and create .csv file of "azm_sr" unitigs
+# Manual Transpose, join, and create .csv files of azm unitigs
 # unitigs_azm %>%
 #   pivot_longer(-pattern_id, "Sample_ID", "value") %>%
-#   pivot_wider(Sample_ID, pattern_id) %>%
-# write_csv(path="./unitigs_azm.csv")
+#   pivot_wider(Sample_ID, pattern_id) %>% 
+#   inner_join(select(metadata, "Sample_ID", matches('^azm')), by = "Sample_ID") %>% 
+#   select('Sample_ID', last_col(), everything()) %>% 
+#   drop_na() %>% 
+#   write_csv(path="./unitigs_azm.csv")
+
+# Use 'unitigs' function to create .csv files
+unitigs(unitigs_azm)
+unitigs(unitigs_cfx)
+unitigs(unitigs_cip)
