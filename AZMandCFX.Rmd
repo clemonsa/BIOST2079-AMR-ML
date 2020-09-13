@@ -1,0 +1,39 @@
+---
+title: "DataClean"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readr)
+```
+
+```{r}
+azm<-read.csv("unitigs_azm.csv")
+cfx<-read.csv("unitigs_cfx.csv")
+```
+
+```{r}
+set.seed(123)
+dt = sort(sample(nrow(azm), nrow(azm)*.5))
+azm.train<-azm[dt,]
+azm.test<-azm[-dt,]
+xtrain.azm=model.matrix (azm_sr~.,azm.train[,-1])[,-1]
+xtest.azm=model.matrix (azm_sr~.,azm.test[,-1])[,-1]
+ytrain.azm=azm.train$azm_sr
+ytest.azm=azm.test$azm_sr
+
+dt2 = sort(sample(nrow(cfx), nrow(cfx)*.5))
+cfx.train<-cfx[dt2,]
+cfx.test<-cfx[-dt2,]
+xtrain.cfx=model.matrix (cfx_sr~.,cfx.train[,-1])[,-1]
+xtest.cfx=model.matrix (cfx_sr~.,cfx.test[,-1])[,-1]
+ytrain.cfx=cfx.train$cfx_sr
+ytest.cfx=cfx.test$cfx_sr
+
+```
+
