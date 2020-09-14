@@ -1,0 +1,20 @@
+---
+title: "Ciprofloxacin AMR Prediction"
+author: "Arvon Clemons, Mark Vater"
+date: "9/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import and Split Data
+```{r}
+#Import
+## May require using "data_clean_script.R" to create "unitigs_cip.csv" in local directory
+cipData <- readr::read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL)))
+
+#Split
+
+```
