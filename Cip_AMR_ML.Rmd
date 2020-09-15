@@ -9,12 +9,46 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Libraries
+```{r warning = FALSE, message=FALSE, echo=FALSE}
+#install packages only if you have not already done so 
+list.of.packages <- c("randomForest", "ggplot2", "dplyr", "caret", "readr", "e1071", "mlbench", "slam")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+#library packages
+for (pkg in c("randomForest", "ggplot2", "dplyr", "caret", "readr")) {
+  library(pkg, character.only = TRUE)
+  }
+```
+
 # Import and Split Data
 ```{r}
 #Import
 ## May require using "data_clean_script.R" to create "unitigs_cip.csv" in local directory
-cipData <- readr::read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL)))
-
+cipData <- read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL))) %>% 
+  select(-Sample_ID) %>% 
+  select_if(sapply(cipData, nlevels) > 1)
 #Split
+set.seed(05101929)
+index <- cipData$cip_sr %>% 
+  createDataPartition(times = 1, p = 0.7, list = FALSE)
 
+cipTrain <- cipData %>% slice(index)
+cipTest <- cipData %>% slice(-index)
+
+```
+
+# Training and Fit
+```{r}
+trCtrl <- trainControl("cv", number = 10) #cross-validation
+
+#Model Fit
+set.seed(05101929)
+modelRF <- train(
+  cip_sr ~., data = cipTrain, method = "rf",
+  trControl = trCtrl,
+  importance = TRUE
+  )
+# Best tuning parameter
+model$bestTune
 ```
