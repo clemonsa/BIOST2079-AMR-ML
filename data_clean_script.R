@@ -25,6 +25,8 @@ unitigs <- function(unitig){
     # join relevant antibiotic metadata
     dplyr::inner_join(dplyr::select(metadata, "Sample_ID", dplyr::matches(stringr::str_extract(unitig_name, "[[:alpha:]]+$"))), by = "Sample_ID") %>% 
     dplyr::select('Sample_ID', dplyr::last_col(), dplyr::everything()) %>% 
+    # rename unitigs to format "geneX" where X is a positive integer
+    data.table::setnames(., old = names(.[3:length(.)]), new = paste0('gene', seq_along(.[3:length(.)])), skip_absent = T) %>% 
     tidyr::drop_na() %>% 
     # create .csv file
     readr::write_csv(path=paste0('./', stringr::str_extract(unitig_name,"[[:alpha:]]+[_][[:alpha:]]+"), '.csv'))
@@ -33,10 +35,11 @@ unitigs <- function(unitig){
 # Manual Transpose, join, and create .csv files of azm unitigs
 # unitigs_azm %>%
 #   pivot_longer(-pattern_id, "Sample_ID", "value") %>%
-#   pivot_wider(Sample_ID, pattern_id) %>% 
-#   inner_join(select(metadata, "Sample_ID", matches('^azm')), by = "Sample_ID") %>% 
-#   select('Sample_ID', last_col(), everything()) %>% 
-#   drop_na() %>% 
+#   pivot_wider(Sample_ID, pattern_id) %>%
+#   inner_join(select(metadata, "Sample_ID", matches('^azm')), by = "Sample_ID") %>%
+#   select('Sample_ID', last_col(), everything()) %>%
+#   data.table::setnames(., old = names(.[2:length(.)]), new = paste0('gene', seq_along(.[2:length(.)])), skip_absent = T) %>% 
+#   drop_na() %>%
 #   write_csv(path="./unitigs_azm.csv")
 
 # Use 'unitigs' function to create .csv files
