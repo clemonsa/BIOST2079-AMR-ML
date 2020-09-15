@@ -23,9 +23,9 @@ unitigs <- function(unitig){
     tidyr::pivot_longer(-pattern_id, "Sample_ID", "value") %>% 
     tidyr::pivot_wider(Sample_ID, pattern_id) %>%
     # join relevant antibiotic metadata
-    dplyr::inner_join(select(metadata, "Sample_ID", dplyr::matches(stringr::str_extract(unitig_name, "[[:alpha:]]+$"))), by = "Sample_ID") %>% 
-    select('Sample_ID', last_col(), everything()) %>% 
-    drop_na() %>% 
+    dplyr::inner_join(dplyr::select(metadata, "Sample_ID", dplyr::matches(stringr::str_extract(unitig_name, "[[:alpha:]]+$"))), by = "Sample_ID") %>% 
+    dplyr::select('Sample_ID', dplyr::last_col(), dplyr::everything()) %>% 
+    tidyr::drop_na() %>% 
     # create .csv file
     readr::write_csv(path=paste0('./', stringr::str_extract(unitig_name,"[[:alpha:]]+[_][[:alpha:]]+"), '.csv'))
 }
