@@ -13,8 +13,8 @@ library(readr)
 ```
 
 ```{r}
-azm<-read.csv("unitigs_azm.csv")
-cfx<-read.csv("unitigs_cfx.csv")
+azm<-read_csv("./unitigs_azm.csv", col_types = cols(.default = col_factor(NULL)))
+cfx<-read_csv("./unitigs_cfx.csv", col_types = cols(.default = col_factor(NULL)))
 ```
 
 ```{r}
