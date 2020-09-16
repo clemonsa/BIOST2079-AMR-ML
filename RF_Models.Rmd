@@ -28,7 +28,6 @@ for (pkg in c("randomForest", "ggplot2", "dplyr",
 #Import
 ## May require using "data_clean_script.R" to create "unitigs_cip.csv" in local directory
 cipData <- read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL))) %>% 
-  select(-Sample_ID) %>% 
   select_if(sapply(., nlevels) > 1)
 #Split
 set.seed(05101929)
@@ -37,53 +36,58 @@ index <- cipData$cip_sr %>%
 
 cipTrain <- cipData %>% slice(index)
 cipTest <- cipData %>% slice(-index)
-
 ```
 
 # Practice Model Training and Fit
 ```{r}
-miniData <- cipData[1:1200, 1:3000]
+miniData <- cipData[1:1200, ] #subset to first 1200 observations
 index2 <- miniData$cip_sr %>% 
   createDataPartition(times = 1, p = 0.8, list = FALSE)
 
-miniTrain <- miniData %>% slice(index2)
-miniTest <- miniData %>% slice(-index2)
+miniTrain <- miniData %>% slice(index2) #train subset
+miniTest <- miniData %>% slice(-index2) #test subset
 
-trCtrl <- trainControl("cv", number = 10) #cross-validation
+trCtrl <- trainControl("cv", number = 10, #cross-validation
+                       allowParallel = TRUE) #parallelization
 
-# cl <- makePSOCKcluster(4)
-# registerDoParallel(cl)
-# set.seed(05101929)
-# 
-# system.time(
-#   pracRF <- train(
-#     cip_sr~., data=miniTrain, method="rf",
-#     trControl = trCtrl,
-#     importance = T
-#   )
-# )
-# stopCluster(cl)
+cl <- makePSOCKcluster(6) #set number of cores
+registerDoParallel(cl)
+set.seed(05101929)
+
+system.time(
+  pracRF <- train(
+    cip_sr~., data=miniTrain, method="parRF",
+    trControl = trCtrl,
+    importance = T
+  )
+)
+stopCluster(cl)
 
 
-saveRDS(pracRF, file = "mockRF_model") #save practice model
-predictedAR <- pracRF %>% predict(miniTest) #predictions
-mean(predictedAR == miniTest$cip_sr) #assess model accuracy
-#[1] 0.9707113
+saveRDS(pracRF, file = "mockRF_model") #save mock model
+predictedAR <- pracRF %>% predict(miniTest) #mock predictions
+mean(predictedAR == miniTest$cip_sr) #assess mock model accuracy
+#[1] 0.9958159
+
+predictedAR2 <- pracRF %>% predict(cipTest) #mock predictions on full dataset
+mean(predictedAR == cipTest$cip_sr) #assess mock model accuracy on full dataset
+#[1] 0.9773218
 ```
 
 # Full Model Training and Fit (DO NOT RUN!!!!)
 ```{r}
-trCtrl <- trainControl("cv", number = 10) #cross-validation
+trCtrl <- trainControl("cv", number = 10, #cross-validation
+                       allowParallel = TRUE) #parallelization
 
 # Select Cores for Parallelization
-cl <- makePSOCKcluster(8)
+cl <- makePSOCKcluster(8) #set number of cores
 registerDoParallel(cl)
 set.seed(05101929)
 
 # #Model Fit
 # system.time(
 # modelRF <- train(
-#   cip_sr ~., data = cipTrain, method = "rf",
+#   cip_sr~., data = cipTrain, method = "parRF",
 #   trControl = trCtrl,
 #   importance = TRUE
 #   )
@@ -91,6 +95,10 @@ set.seed(05101929)
 # After fitting model
 stopCluster(cl)
 
+saveRDS(modelRF, file = "fullRF_model") #save full model
+predictedAR <- modelRF %>% predict(cipTest) #full predictions
+mean(predictedAR == cipTest$cip_sr) #assess full model accuracy
+
 # Best tuning parameter
-model$bestTune
+modelRF$bestTune
 ```
