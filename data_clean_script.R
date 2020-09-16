@@ -24,7 +24,7 @@ unitigs <- function(unitig){
     tidyr::pivot_wider(Sample_ID, pattern_id) %>%
     # join relevant antibiotic metadata
     dplyr::inner_join(dplyr::select(metadata, "Sample_ID", dplyr::matches(stringr::str_extract(unitig_name, "[[:alpha:]]+$"))), by = "Sample_ID") %>% 
-    dplyr::select(dplyr::last_col(), dplyr::everything()) %>% 
+    dplyr::select(Sample_ID, dplyr::last_col(), dplyr::everything()) %>% 
     # rename unitigs to format "geneX" where X is a positive integer
     data.table::setnames(., old = names(.[3:length(.)]), new = paste0('gene', seq_along(.[3:length(.)])), skip_absent = T) %>% 
     tidyr::drop_na() %>% 
