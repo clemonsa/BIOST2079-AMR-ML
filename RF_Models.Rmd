@@ -23,57 +23,6 @@ for (pkg in c("randomForest", "ggplot2", "dplyr",
   }
 ```
 
-# Import and Split Data
-```{r}
-#Import
-## May require using "data_clean_script.R" to create "unitigs_cip.csv" in local directory
-cipData <- read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL))) %>% 
-  select_if(sapply(., nlevels) > 1)
-#Split
-set.seed(05101929)
-index <- cipData$cip_sr %>% 
-  createDataPartition(times = 1, p = 0.7, list = FALSE)
-
-cipTrain <- cipData %>% slice(index)
-cipTest <- cipData %>% slice(-index)
-```
-
-# Practice Model Training and Fit
-```{r}
-miniData <- cipData[1:1200, ] #subset to first 1200 observations
-index2 <- miniData$cip_sr %>% 
-  createDataPartition(times = 1, p = 0.8, list = FALSE)
-
-miniTrain <- miniData %>% slice(index2) #train subset
-miniTest <- miniData %>% slice(-index2) #test subset
-
-trCtrl <- trainControl("cv", number = 10, #cross-validation
-                       allowParallel = TRUE) #parallelization
-
-# cl <- makePSOCKcluster(6) #set number of cores
-# registerDoParallel(cl)
-# set.seed(05101929)
-# 
-# system.time(
-#   pracRF <- train(
-#     cip_sr~., data=miniTrain, method="parRF",
-#     trControl = trCtrl,
-#     importance = T
-#   )
-# )
-# stopCluster(cl)
-
-
-saveRDS(pracRF, file = "mockRF_model") #save mock model
-predictedAR <- pracRF %>% predict(miniTest) #mock predictions
-mean(predictedAR == miniTest$cip_sr) #assess mock model accuracy
-#[1] 0.9958159
-
-predictedAR2 <- pracRF %>% predict(cipTest) #mock predictions on full dataset
-mean(predictedAR == cipTest$cip_sr) #assess mock model accuracy on full dataset
-#[1] 0.9773218
-```
-
 # Function to create Training and Test datasets
 ```{r}
 datasetsRF <- function(csvname, seed=05101929, percent=0.7){
@@ -126,6 +75,57 @@ invisible(modelRF)
 
 # saveRDS(modelRF, file = "mockRF_model") #save RF model
 
+```
+
+# Import and Split Data
+```{r}
+#Import
+## May require using "data_clean_script.R" to create "unitigs_cip.csv" in local directory
+cipData <- read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL))) %>% 
+  select_if(sapply(., nlevels) > 1)
+#Split
+set.seed(05101929)
+index <- cipData$cip_sr %>% 
+  createDataPartition(times = 1, p = 0.7, list = FALSE)
+
+cipTrain <- cipData %>% slice(index)
+cipTest <- cipData %>% slice(-index)
+```
+
+# Practice Model Training and Fit
+```{r}
+miniData <- cipData[1:1200, ] #subset to first 1200 observations
+index2 <- miniData$cip_sr %>% 
+  createDataPartition(times = 1, p = 0.8, list = FALSE)
+
+miniTrain <- miniData %>% slice(index2) #train subset
+miniTest <- miniData %>% slice(-index2) #test subset
+
+trCtrl <- trainControl("cv", number = 10, #cross-validation
+                       allowParallel = TRUE) #parallelization
+
+# cl <- makePSOCKcluster(6) #set number of cores
+# registerDoParallel(cl)
+# set.seed(05101929)
+# 
+# system.time(
+#   pracRF <- train(
+#     cip_sr~., data=miniTrain, method="parRF",
+#     trControl = trCtrl,
+#     importance = T
+#   )
+# )
+# stopCluster(cl)
+
+
+saveRDS(pracRF, file = "mockRF_model") #save mock model
+predictedAR <- pracRF %>% predict(miniTest) #mock predictions
+mean(predictedAR == miniTest$cip_sr) #assess mock model accuracy
+#[1] 0.9958159
+
+predictedAR2 <- pracRF %>% predict(cipTest) #mock predictions on full dataset
+mean(predictedAR == cipTest$cip_sr) #assess mock model accuracy on full dataset
+#[1] 0.9773218
 ```
 
 # Full Model Training and Fit (DO NOT RUN!!!!)
