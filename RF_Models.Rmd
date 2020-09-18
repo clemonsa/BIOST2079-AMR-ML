@@ -46,6 +46,9 @@ dfTest <- rfData %>% dplyr::slice(-index) #testing dataset
 dataSets <- list(training = dfTrain, testing = dfTest)
 invisible(dataSets)
 }
+
+#Example of using datasetsRF()
+azm <- datasetsRF("./unitigs_azm.csv")
 ```
 
 # Function to Train and Fit Random Forest Model (USE CAUTION)!!!
