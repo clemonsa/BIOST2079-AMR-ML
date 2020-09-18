@@ -1,5 +1,7 @@
 ---
-title: "DataClean"
+title: "Elastic Net Logistic Regression"
+author: "Ashika Mani"
+date: "9/18/2020"
 output: html_document
 ---
 
@@ -7,33 +9,41 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Libraries
 ```{r}
 library(tidyverse)
 library(readr)
+library(ggplot2)
+library(caret)
 ```
 
+
+# Import and Split Data
 ```{r}
 azm<-read_csv("./unitigs_azm.csv", col_types = cols(.default = col_factor(NULL)))
 cfx<-read_csv("./unitigs_cfx.csv", col_types = cols(.default = col_factor(NULL)))
+cip<-read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL)))
 ```
 
 ```{r}
 set.seed(123)
-dt = sort(sample(nrow(azm), nrow(azm)*.5))
+dt = sort(sample(nrow(azm), nrow(azm)*.7))
 azm.train<-azm[dt,]
 azm.test<-azm[-dt,]
-xtrain.azm=model.matrix (azm_sr~.,azm.train[,-1])[,-1]
-xtest.azm=model.matrix (azm_sr~.,azm.test[,-1])[,-1]
 ytrain.azm=azm.train$azm_sr
 ytest.azm=azm.test$azm_sr
 
-dt2 = sort(sample(nrow(cfx), nrow(cfx)*.5))
+dt2 = sort(sample(nrow(cfx), nrow(cfx)*.7))
 cfx.train<-cfx[dt2,]
 cfx.test<-cfx[-dt2,]
-xtrain.cfx=model.matrix (cfx_sr~.,cfx.train[,-1])[,-1]
-xtest.cfx=model.matrix (cfx_sr~.,cfx.test[,-1])[,-1]
 ytrain.cfx=cfx.train$cfx_sr
 ytest.cfx=cfx.test$cfx_sr
+
+dt3 = sort(sample(nrow(cip), nrow(cip)*.7))
+cip.train<-cip[dt3,]
+cip.test<-cip[-dt3,]
+ytrain.cip=cip.train$cip_sr
+ytest.cip=cip.test$cip_sr
 
 ```
 
