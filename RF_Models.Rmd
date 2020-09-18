@@ -31,7 +31,7 @@ datasetsRF <- function(csvname, seed=05101929, percent=0.7){
   '%>%' <- tidyr::'%>%'
   
 #Import dataset
-rfData <- readr::read_csv(csvname, col_types = readr::cols(.default = col_factor(NULL))) %>% 
+rfData <- readr::read_csv(csvname, col_types = readr::cols(.default = readr::col_factor(NULL))) %>% 
   dplyr::select_if(sapply(., nlevels) > 1)
 #Split
 set.seed(seed)
