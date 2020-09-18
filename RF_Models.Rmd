@@ -1,6 +1,6 @@
 ---
-title: "Ciprofloxacin AMR Prediction"
-author: "Arvon Clemons, Mark Vater"
+title: "Random Forest AMR Prediction"
+author: "Arvon Clemons"
 date: "9/14/2020"
 output: html_document
 ---
@@ -21,6 +21,83 @@ for (pkg in c("randomForest", "ggplot2", "dplyr",
               "caret", "readr","parallel", "doParallel")) {
   library(pkg, character.only = TRUE)
   }
+```
+
+# Function to create Training and Test datasets
+```{r}
+datasetsRF <- function(csvname, seed=05101929, percent=0.7){
+  stopifnot(is.character(csvname))
+  
+  '%>%' <- tidyr::'%>%'
+  
+#Import dataset
+rfData <- readr::read_csv(csvname, col_types = readr::cols(.default = readr::col_factor(NULL))) %>% 
+  dplyr::select_if(sapply(., nlevels) > 1)
+#Split
+set.seed(seed)
+index <- dplyr::select(rfData,dplyr::matches(stringr::str_extract(unlist(stringr::str_split(csvname, "_"))[2],"^[[:alpha:]]+"))) %>% 
+  unlist() %>% 
+  caret::createDataPartition(times = 1, p = percent, list = FALSE)
+
+dfTrain <- rfData %>% dplyr::slice(index) #training dataset
+dfTest <- rfData %>% dplyr::slice(-index) #testing dataset
+
+#return datasets
+dataSets <- list(training = dfTrain, testing = dfTest)
+invisible(dataSets)
+}
+
+#Example of using datasetsRF()
+azm <- datasetsRF("./unitigs_azm.csv")
+head(azm$training)
+# azm_sr gene1 gene2 gene3 gene4 gene5 gene6 gene7 gene8 gene9 gene10 gene11 gene12 gene13 gene14 gene15 gene16 gene17 gene18 gene19 gene20 gene21
+#   <fct>  <fct> <fct> <fct> <fct> <fct> <fct> <fct> <fct> <fct> <fct>  <fct>  <fct>  <fct>  <fct>  <fct>  <fct>  <fct>  <fct>  <fct>  <fct>  <fct> 
+# 1 1      0     0     0     0     0     0     0     0     0     0      0      0      0      0      0      0      0      0      0      0      0     
+# 2 1      0     0     0     0     0     0     0     0     0     0      0      0      0      0      0      0      0      0      0      0      0     
+# 3 1      0     0     0     0     0     0     0     0     0     0      0      0      0      0      0      0      0      0      0      0      0     
+# 4 0      0     0     0     0     0     0     0     0     0     0      0      0      0      0      0      0      0      0      0      0      0     
+# 5 1      0     0     0     0     0     0     0     0     0     0      0      0      0      0      0      0      0      0      0      0      0     
+# 6 0      0     0     0     0     0     0     0     0     0     0      0      0      0      0      0      0      0      0      0      0      0     
+# ... with 469 more variables: gene22 <fct>, gene23 <fct>, gene24 <fct>, gene25 <fct>, gene26 <fct>, gene27 <fct>, gene28 <fct>, gene29 <fct>,
+#   gene30 <fct>, gene31 <fct>, gene32 <fct>, gene33 <fct>, gene34 <fct>, gene35 <fct>, gene36 <fct>, gene37 <fct>, gene38 <fct>, gene39 <fct>,
+#   gene40 <fct>, gene41 <fct>, gene42 <fct>, gene43 <fct>, gene44 <fct>, gene45 <fct>, gene46 <fct>, gene47 <fct>, gene48 <fct>, gene49 <fct>,
+#   gene50 <fct>, gene51 <fct>, gene52 <fct>, gene53 <fct>, gene54 <fct>, gene55 <fct>, gene56 <fct>, gene57 <fct>, gene58 <fct>, gene59 <fct>,
+#   gene60 <fct>, gene61 <fct>, gene62 <fct>, gene63 <fct>, gene64 <fct>, gene65 <fct>, gene66 <fct>, gene67 <fct>, gene68 <fct>, gene69 <fct>,
+#   gene70 <fct>, gene71 <fct>, gene72 <fct>, gene73 <fct>, gene75 <fct>, gene76 <fct>, gene77 <fct>, gene78 <fct>, gene80 <fct>, gene82 <fct>,
+#   gene83 <fct>, gene84 <fct>, gene85 <fct>, gene86 <fct>, gene87 <fct>, gene88 <fct>, gene89 <fct>, gene90 <fct>, gene91 <fct>, gene92 <fct>,
+#   gene93 <fct>, gene94 <fct>, gene95 <fct>, gene96 <fct>, gene97 <fct>, gene98 <fct>, gene99 <fct>, gene100 <fct>, gene101 <fct>, gene102 <fct>,
+#   gene103 <fct>, gene104 <fct>, gene107 <fct>, gene108 <fct>, gene109 <fct>, gene110 <fct>, gene111 <fct>, gene112 <fct>, gene113 <fct>,
+#   gene114 <fct>, gene115 <fct>, gene116 <fct>, gene117 <fct>, gene118 <fct>, gene119 <fct>, gene120 <fct>, gene121 <fct>, gene122 <fct>,
+#   gene123 <fct>, gene124 <fct>, gene125 <fct>, gene126 <fct>, ...
+```
+
+# Function to Train and Fit Random Forest Model (USE CAUTION)!!!
+```{r}
+trainRF <- function(training, y, seed=05101929, workers = 2, number=10){
+trCtrl <- caret::trainControl("cv", number = number, #cross-validation
+                       allowParallel = TRUE) #parallelization
+
+cl <- parallel::makePSOCKcluster(workers) #set number of cores
+doParallel::registerDoParallel(cl)
+set.seed(seed)
+
+#training and fitting model
+system.time(
+  modelRF <- train(
+    paste0(y,"~",.), data=training, method="parRF",
+    trControl = trCtrl,
+    importance = T
+  )
+)
+doParallel::stopCluster(cl)
+
+
+
+invisible(modelRF)
+}
+
+# saveRDS(modelRF, file = "mockRF_model") #save RF model
+
 ```
 
 # Import and Split Data
@@ -50,18 +127,18 @@ miniTest <- miniData %>% slice(-index2) #test subset
 trCtrl <- trainControl("cv", number = 10, #cross-validation
                        allowParallel = TRUE) #parallelization
 
-cl <- makePSOCKcluster(6) #set number of cores
-registerDoParallel(cl)
-set.seed(05101929)
-
-system.time(
-  pracRF <- train(
-    cip_sr~., data=miniTrain, method="parRF",
-    trControl = trCtrl,
-    importance = T
-  )
-)
-stopCluster(cl)
+# cl <- makePSOCKcluster(6) #set number of cores
+# registerDoParallel(cl)
+# set.seed(05101929)
+# 
+# system.time(
+#   pracRF <- train(
+#     cip_sr~., data=miniTrain, method="parRF",
+#     trControl = trCtrl,
+#     importance = T
+#   )
+# )
+# stopCluster(cl)
 
 
 saveRDS(pracRF, file = "mockRF_model") #save mock model
