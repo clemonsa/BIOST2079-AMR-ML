@@ -25,7 +25,7 @@ for (pkg in c("randomForest", "ggplot2", "dplyr",
 
 # Function to create Training and Test datasets
 ```{r}
-datasetsRF <- function(csvname, percent=0.7, seed=05101929){
+createDS <- function(csvname, percent=0.7, seed=05101929){
   stopifnot(is.character(csvname))
   
   '%>%' <- tidyr::'%>%'
@@ -47,9 +47,9 @@ dataSets <- list(training = dfTrain, testing = dfTest)
 invisible(dataSets)
 }
 
-#Example of using datasetsRF()
-azm <- datasetsRF("./unitigs_azm.csv")
-tibble::glimpse(azm$training[1:6])
+#Example of using createDS()
+azmDS <- createDS("./unitigs_azm.csv")
+tibble::glimpse(azmDS$training[1:6])
 # Rows: 2,435
 # Columns: 6
 # $ azm_sr <fct> 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,...
@@ -62,35 +62,49 @@ tibble::glimpse(azm$training[1:6])
 
 # Function to Train and Fit Random Forest Model (USE CAUTION)!!!
 ```{r}
-trainRF <- function(training, outcome, seed=05101929, workers = 0, number=10, tune=FALSE){
-  stopifnot(is.logical(tune))
+trainMethods <- function(training, outcome, method, tunelength=3,seed=05101929, workers = 0, number=10){
+  stopifnot(is.character(method), is.object(training), is.character(outcome))
 trCtrl <- caret::trainControl("cv", number = number, #cross-validation
                        allowParallel = TRUE) #parallelization
-tunegrid <- expand.grid(.mtry=c(1:15)) #gridsearch for mtry parameter
 
 cl <- parallel::makePSOCKcluster(ifelse(workers, workers, parallel::detectCores())) #set number of cores
 doParallel::registerDoParallel(cl)
 set.seed(seed)
 
 #training and fitting model
-system.time(
   modelRF <- caret::train(as.formula(
     paste0(outcome,"~.")),
-    data=training, method="parRF",
-#    tuneGrid = ifelse(tune, tunegrid, NULL),
+    data=training, method=method,
+    tuneLength = tunelength,
     trControl = trCtrl,
     importance = T
   )
-)
-doParallel::stopCluster(cl)
-
-
+parallel::stopCluster()
 
 invisible(modelRF)
 }
 
-# saveRDS(modelRF, file = "mockRF_model") #save RF model
-
+#Example of using trainMethods()
+azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF")
+azmRF
+# Parallel Random Forest 
+# 
+# 2435 samples
+#  490 predictor
+#    2 classes: '1', '0' 
+# 
+# No pre-processing
+# Resampling: Cross-Validated (10 fold) 
+# Summary of sample sizes: 2191, 2192, 2191, 2192, 2192, 2192, ... 
+# Resampling results across tuning parameters:
+# 
+#   mtry  Accuracy   Kappa     
+#     2   0.8726911  0.01630407
+#   246   0.9733084  0.88249905
+#   490   0.9700179  0.86726412
+# 
+# Accuracy was used to select the optimal model using the largest value.
+# The final value used for the model was mtry = 246.
 ```
 
 # Import and Split Data
@@ -146,28 +160,29 @@ mean(predictedAR == cipTest$cip_sr) #assess mock model accuracy on full dataset
 
 # Full Model Training and Fit (DO NOT RUN!!!!)
 ```{r}
-trCtrl <- trainControl("cv", number = 10, #cross-validation
+trCtrl <- caret::trainControl("cv", number = 10, #cross-validation
                        allowParallel = TRUE) #parallelization
 
+tunegrid <- expand.grid(.mtry=c(1:15)) #gridsearch for mtry parameter
+
 # Select Cores for Parallelization
-cl <- makePSOCKcluster(4) #set number of cores
-registerDoParallel(cl)
+cl <- parallel::makePSOCKcluster(4) #set number of cores
+doParallel::registerDoParallel(cl)
 set.seed(05101929)
 
-# #Model Fit
-# system.time(
-# modelRF <- train(
-#   azm_sr~., data = azm$training, method = "parRF",
-#   trControl = trCtrl,
-#   importance = TRUE
-#   )
-# )
-# After fitting model
-stopCluster(cl)
+#Model Fit
+modelRF <- caret::train(
+  azm_sr~., data = azm$training, method = "parRF",
+  tuneGrid = tunegrid,
+  trControl = trCtrl,
+  importance = TRUE
+  )
+#After fitting model
 
-saveRDS(modelRF, file = "fullRF_model") #save full model
-predictedAR <- modelRF %>% predict(cipTest) #full predictions
-mean(predictedAR == cipTest$cip_sr) #assess full model accuracy
+saveRDS(modelRF, file = "azmRF_model2") #save full model
+predictedAR <- modelRF %>% predict(azm$testing) #full predictions
+parallel::stopCluster(cl)
+mean(predictedAR == azm$testing$azm_sr) #assess full model accuracy
 
 # Best tuning parameter
 modelRF$bestTune
