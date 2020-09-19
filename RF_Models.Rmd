@@ -68,19 +68,16 @@ trCtrl <- caret::trainControl("cv", number = number, #cross-validation
                        allowParallel = TRUE) #parallelization
 tunegrid <- expand.grid(.mtry=c(1:15)) #gridsearch for mtry parameter
 
-"~" <- base::"~"
-"." <- plyr::"."
-
 cl <- parallel::makePSOCKcluster(ifelse(workers, workers, parallel::detectCores())) #set number of cores
 doParallel::registerDoParallel(cl)
 set.seed(seed)
 
 #training and fitting model
 system.time(
-  modelRF <- caret::train(
-    paste0(outcome,"~."),
+  modelRF <- caret::train(as.formula(
+    paste0(outcome,"~.")),
     data=training, method="parRF",
-    tuneGrid = ifelse(tune, tunegrid, NULL),
+#    tuneGrid = ifelse(tune, tunegrid, NULL),
     trControl = trCtrl,
     importance = T
   )
