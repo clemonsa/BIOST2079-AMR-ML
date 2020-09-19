@@ -79,7 +79,7 @@ set.seed(seed)
     trControl = trCtrl,
     importance = T
   )
-parallel::stopCluster()
+parallel::stopCluster(cl)
 
 invisible(modelRF)
 }
