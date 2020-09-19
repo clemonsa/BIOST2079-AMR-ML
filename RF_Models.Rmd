@@ -25,7 +25,7 @@ for (pkg in c("randomForest", "ggplot2", "dplyr",
 
 # Function to create Training and Test datasets
 ```{r}
-datasetsRF <- function(csvname, seed=05101929, percent=0.7){
+datasetsRF <- function(csvname, percent=0.7, seed=05101929){
   stopifnot(is.character(csvname))
   
   '%>%' <- tidyr::'%>%'
@@ -62,18 +62,25 @@ tibble::glimpse(azm$training[1:6])
 
 # Function to Train and Fit Random Forest Model (USE CAUTION)!!!
 ```{r}
-trainRF <- function(training, y, seed=05101929, workers = 2, number=10){
+trainRF <- function(training, outcome, seed=05101929, workers = 0, number=10, tune=FALSE){
+  stopifnot(is.logical(tune))
 trCtrl <- caret::trainControl("cv", number = number, #cross-validation
                        allowParallel = TRUE) #parallelization
+tunegrid <- expand.grid(.mtry=c(1:15)) #gridsearch for mtry parameter
 
-cl <- parallel::makePSOCKcluster(workers) #set number of cores
+"~" <- base::"~"
+"." <- plyr::"."
+
+cl <- parallel::makePSOCKcluster(ifelse(workers, workers, parallel::detectCores())) #set number of cores
 doParallel::registerDoParallel(cl)
 set.seed(seed)
 
 #training and fitting model
 system.time(
-  modelRF <- train(
-    paste0(y,"~",.), data=training, method="parRF",
+  modelRF <- caret::train(
+    paste0(outcome,"~."),
+    data=training, method="parRF",
+    tuneGrid = ifelse(tune, tunegrid, NULL),
     trControl = trCtrl,
     importance = T
   )
@@ -146,14 +153,14 @@ trCtrl <- trainControl("cv", number = 10, #cross-validation
                        allowParallel = TRUE) #parallelization
 
 # Select Cores for Parallelization
-cl <- makePSOCKcluster(8) #set number of cores
+cl <- makePSOCKcluster(4) #set number of cores
 registerDoParallel(cl)
 set.seed(05101929)
 
 # #Model Fit
 # system.time(
 # modelRF <- train(
-#   cip_sr~., data = cipTrain, method = "parRF",
+#   azm_sr~., data = azm$training, method = "parRF",
 #   trControl = trCtrl,
 #   importance = TRUE
 #   )
