@@ -85,7 +85,7 @@ invisible(modelRF)
 }
 
 #Example of using trainMethods()
-azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF")
+azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", tunelength = 10)
 azmRF
 # Parallel Random Forest 
 # 
@@ -106,6 +106,12 @@ azmRF
 # Accuracy was used to select the optimal model using the largest value.
 # The final value used for the model was mtry = 246.
 ```
+# Save and assess model accuracy
+```{r}
+saveRDS(cfxRF, file = "cfxRF_model") #save model
+predictedAR <- predict(cfxRF, cfxDS$testing) #full predictions
+mean(predictedAR == cfxDS$testing$cfx_sr) #assess full model accuracy
+```
 
 # Import and Split Data
 ```{r}
@@ -122,62 +128,24 @@ cipTrain <- cipData %>% slice(index)
 cipTest <- cipData %>% slice(-index)
 ```
 
-# Practice Model Training and Fit
-```{r}
-miniData <- cipData[1:1200, ] #subset to first 1200 observations
-index2 <- miniData$cip_sr %>% 
-  createDataPartition(times = 1, p = 0.8, list = FALSE)
-
-miniTrain <- miniData %>% slice(index2) #train subset
-miniTest <- miniData %>% slice(-index2) #test subset
-
-trCtrl <- trainControl("cv", number = 10, #cross-validation
-                       allowParallel = TRUE) #parallelization
-
-# cl <- makePSOCKcluster(6) #set number of cores
-# registerDoParallel(cl)
-# set.seed(05101929)
-# 
-# system.time(
-#   pracRF <- train(
-#     cip_sr~., data=miniTrain, method="parRF",
-#     trControl = trCtrl,
-#     importance = T
-#   )
-# )
-# stopCluster(cl)
-
-
-saveRDS(pracRF, file = "mockRF_model") #save mock model
-predictedAR <- pracRF %>% predict(miniTest) #mock predictions
-mean(predictedAR == miniTest$cip_sr) #assess mock model accuracy
-#[1] 0.9958159
-
-predictedAR2 <- pracRF %>% predict(cipTest) #mock predictions on full dataset
-mean(predictedAR == cipTest$cip_sr) #assess mock model accuracy on full dataset
-#[1] 0.9773218
-```
-
 # Full Model Training and Fit (DO NOT RUN!!!!)
 ```{r}
 trCtrl <- caret::trainControl("cv", number = 10, #cross-validation
                        allowParallel = TRUE) #parallelization
-
-tunegrid <- expand.grid(.mtry=c(1:15)) #gridsearch for mtry parameter
 
 # Select Cores for Parallelization
 cl <- parallel::makePSOCKcluster(4) #set number of cores
 doParallel::registerDoParallel(cl)
 set.seed(05101929)
 
-#Model Fit
-modelRF <- caret::train(
-  azm_sr~., data = azm$training, method = "parRF",
-  tuneGrid = tunegrid,
-  trControl = trCtrl,
-  importance = TRUE
-  )
-#After fitting model
+# #Model Fit
+# modelRF <- caret::train(
+#   azm_sr~., data = azm$training, method = "parRF",
+#   tuneGrid = tunegrid,
+#   trControl = trCtrl,
+#   importance = TRUE
+#   )
+# #After fitting model
 
 saveRDS(modelRF, file = "azmRF_model2") #save full model
 predictedAR <- modelRF %>% predict(azm$testing) #full predictions
