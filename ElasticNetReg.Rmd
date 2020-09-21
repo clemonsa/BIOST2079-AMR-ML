@@ -15,34 +15,237 @@ library(tidyverse)
 library(readr)
 library(ggplot2)
 library(caret)
+library(glmnet)
+library(knitr)
 ```
 
 
 # Import and Split Data
 ```{r}
 azm<-read_csv("./unitigs_azm.csv", col_types = cols(.default = col_factor(NULL)))
+azm2 <- azm[,-1] 
+#azm2$azm_sr<- ifelse(azm2$azm_sr == "1", 1, 0)
+rownames(azm2) <- as.character(azm$Sample_ID)
+#azm2<-Filter(function(x)(length(unique(x))>1), azm2)
 cfx<-read_csv("./unitigs_cfx.csv", col_types = cols(.default = col_factor(NULL)))
+cfx2 <- cfx[,-1]
+rownames(cfx2) <- as.character(cfx$Sample_ID)
 cip<-read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL)))
+cip2 <- cip[,-1]
+rownames(cip2) <- as.character(cip$Sample_ID)
 ```
 
 ```{r}
 set.seed(123)
-dt = sort(sample(nrow(azm), nrow(azm)*.7))
-azm.train<-azm[dt,]
-azm.test<-azm[-dt,]
+dt = sort(sample(nrow(azm2), nrow(azm2)*.7))
+azm.train<-azm2[dt,]
+azm.test<-azm2[-dt,]
+
+#Getting rid of factors with only one level
+azm.train<-Filter(function(x)(length(unique(x))>1), azm.train)
+azm.test<-Filter(function(x)(length(unique(x))>1), azm.test)
+#Only keeping columns that are in both azm.train and azm.test
+azm.test<-azm.test[, names(azm.test) %in% colnames(azm.train)]
+azm.train<-azm.train[, names(azm.train) %in% colnames(azm.test)]
+
 ytrain.azm=azm.train$azm_sr
 ytest.azm=azm.test$azm_sr
+xtrain.azm=data.matrix(azm.train[,-1])
+xtest.azm=data.matrix(azm.test[,-1])
 
-dt2 = sort(sample(nrow(cfx), nrow(cfx)*.7))
-cfx.train<-cfx[dt2,]
-cfx.test<-cfx[-dt2,]
+dt2 = sort(sample(nrow(cfx2), nrow(cfx2)*.7))
+cfx.train<-cfx2[dt2,]
+cfx.test<-cfx2[-dt2,]
+#Getting rid of factors with only one level
+cfx.train<-Filter(function(x)(length(unique(x))>1), cfx.train)
+cfx.test<-Filter(function(x)(length(unique(x))>1), cfx.test)
+#Only keeping columns that are in both azm.train and azm.test
+cfx.test<-cfx.test[, names(cfx.test) %in% colnames(cfx.train)]
+cfx.train<-cfx.train[, names(cfx.train) %in% colnames(cfx.test)]
+
 ytrain.cfx=cfx.train$cfx_sr
 ytest.cfx=cfx.test$cfx_sr
+xtrain.cfx=data.matrix(cfx.train[,-1])
+xtest.cfx=data.matrix(cfx.test[,-1])
 
-dt3 = sort(sample(nrow(cip), nrow(cip)*.7))
-cip.train<-cip[dt3,]
-cip.test<-cip[-dt3,]
+dt3 = sort(sample(nrow(cip2), nrow(cip2)*.7))
+cip.train<-cip2[dt3,]
+cip.test<-cip2[-dt3,]
+#Getting rid of factors with only one level
+cip.train<-Filter(function(x)(length(unique(x))>1), cip.train)
+cip.test<-Filter(function(x)(length(unique(x))>1), cip.test)
+#Only keeping columns that are in both azm.train and azm.test
+cip.test<-cip.test[, names(cip.test) %in% colnames(cip.train)]
+cip.train<-cip.train[, names(cip.train) %in% colnames(cip.test)]
+
 ytrain.cip=cip.train$cip_sr
 ytest.cip=cip.test$cip_sr
+xtrain.cip=data.matrix(cip.train[,-1])
+xtest.cip=data.matrix(cip.test[,-1])
 
 ```
+
+
+#Finding the best lambda using cross-validation (Elastic Net)
+
+```{r eval=FALSE, include=FALSE}
+
+debug_contr_error <- function (dat, subset_vec = NULL) {
+  if (!is.null(subset_vec)) {
+    ## step 0
+    if (mode(subset_vec) == "logical") {
+      if (length(subset_vec) != nrow(dat)) {
+        stop("'logical' `subset_vec` provided but length does not match `nrow(dat)`")
+        }
+      subset_log_vec <- subset_vec
+      } else if (mode(subset_vec) == "numeric") {
+      ## check range
+      ran <- range(subset_vec)
+      if (ran[1] < 1 || ran[2] > nrow(dat)) {
+        stop("'numeric' `subset_vec` provided but values are out of bound")
+        } else {
+        subset_log_vec <- logical(nrow(dat))
+        subset_log_vec[as.integer(subset_vec)] <- TRUE
+        } 
+      } else {
+      stop("`subset_vec` must be either 'logical' or 'numeric'")
+      }
+    dat <- base::subset(dat, subset = subset_log_vec)
+    } else {
+    ## step 1
+    dat <- stats::na.omit(dat)
+    }
+  if (nrow(dat) == 0L) warning("no complete cases")
+  ## step 2
+  var_mode <- sapply(dat, mode)
+  if (any(var_mode %in% c("complex", "raw"))) stop("complex or raw not allowed!")
+  var_class <- sapply(dat, class)
+  if (any(var_mode[var_class == "AsIs"] %in% c("logical", "character"))) {
+    stop("matrix variables with 'AsIs' class must be 'numeric'")
+    }
+  ind1 <- which(var_mode %in% c("logical", "character"))
+  dat[ind1] <- lapply(dat[ind1], as.factor)
+  ## step 3
+  fctr <- which(sapply(dat, is.factor))
+  if (length(fctr) == 0L) warning("no factor variables to summary")
+  ind2 <- if (length(ind1) > 0L) fctr[-ind1] else fctr
+  dat[ind2] <- lapply(dat[ind2], base::droplevels.factor)
+  ## step 4
+  lev <- lapply(dat[fctr], base::levels.default)
+  nl <- lengths(lev)
+  ## return
+  list(nlevels = nl, levels = lev)
+  }
+```
+
+```{r}
+set.seed(123)
+
+# train_control = trainControl(method = "cv", number = 10, savePredictions = TRUE)
+
+# elnet_reg = train(azm_sr ~ ., data = azm.train,
+#   method = "glmnet",
+#   trControl = train_control
+# )
+
+# elnet_reg
+grid <- expand.grid(.alpha = seq(0, 1, by = 0.2), .lambda = seq(0.00, 0.2, by = 0.02))
+control <- trainControl("cv", number = 10, #cross-validation
+                       allowParallel = TRUE)
+enet.train <- train(azm_sr ~ ., data = azm.train, method = "glmnet", trControl = control, tuneGrid = grid)
+enet.train$bestTune
+enet.train
+```
+0.4	0.02	
+
+
+# Fitting the final model on training data using best alpha and lambda
+```{r}
+library(Metrics)
+# azm.model <- glmnet(xtrain.azm, ytrain.azm, alpha = .4, family = "binomial", lambda = 0.02)
+# azm.model$beta
+# azm.model
+
+cvfit = cv.glmnet(xtrain.azm, ytrain.azm, alpha=.4, family="binomial", type.measure = "mse")
+lambda_1se <- cvfit$lambda.1se
+coef(cvfit,s=lambda_1se)
+azm_prob <- predict(cvfit, newx = xtest.azm,s=lambda_1se,type="response")
+azm_predict <- ifelse(azm_prob > 0.5, "0", "1")
+table(pred=azm_predict,true=azm.test$azm_sr)
+mean(azm_predict==azm.test$azm_sr)
+
+
+# # Model accuracy
+# probabilities <- azm.model %>% predict(newx = data.matrix(xtest.azm))
+# predicted.classes <- ifelse(probabilities > 0.5, "1", "0")
+# observed.classes <- azm.test$azm_sr
+# mean(predicted.classes == observed.classes)
+# table(predicted.classes,azm.test$azm_sr)
+```
+Model Accuracy is 98.18%
+
+
+#Finding the best alpha using cross-validation (Elastic Net)
+```{r}
+enet.train2 <- train(cfx_sr ~ ., data = cfx.train, method = "glmnet", trControl = control, tuneGrid = grid)
+enet.train2$bestTune
+```
+0 0.2
+# Fitting the final model on training data using best alpha and lambda
+```{r}
+library(Metrics)
+# cfx.model <- glmnet(xtrain.cfx, ytrain.cfx, alpha = 0, family = "binomial", lambda = 0.2)
+# cfx.model$beta
+# cfx.model
+
+
+cvfit2 = cv.glmnet(xtrain.cfx, ytrain.cfx, alpha=0, family="binomial", type.measure = "mse")
+lambda_1se.cfx <- cvfit2$lambda.1se
+coef(cvfit,s=lambda_1se.cfx)
+cfx_prob <- predict(cvfit2,newx = xtest.cfx,s=lambda_1se.cfx,type="response")
+cfx_predict <- ifelse(cfx_prob > 0.5, "1", "0")
+table(pred=cfx_predict,true=cfx.test$cfx_sr)
+mean(cfx_predict==cfx.test$cfx_sr)
+
+# #Calculating Accuracy
+# probabilities2 <- cfx.model %>% predict(newx = xtest.cfx)
+# predicted.classes2 <- ifelse(probabilities2 > 0.5, "1", "0")
+# # Model accuracy
+# observed.classes2 <- cfx.test$cfx_sr
+# mean(predicted.classes2 == observed.classes2)
+# table(predicted.classes2,cfx.test$cfx_sr)
+```
+
+Model Accuracy 99.80%
+
+#Finding the best alpha using cross-validation (Elastic Net)
+```{r}
+enet.train3 <- train(cip_sr ~ ., data = cip.train, method = "glmnet", trControl = control, tuneGrid = grid)
+enet.train3$bestTune
+```
+.6 0.02
+# Fitting the final model on training data using best alpha and lambda
+```{r}
+# library(Metrics)
+# cip.model <- glmnet(xtrain.cip, ytrain.cip, alpha = 0, family = "binomial", lambda = 0.2)
+# cip.model$beta
+# cip.model
+
+cvfit3 = cv.glmnet(xtrain.cip, ytrain.cip, alpha=.6, family="binomial", type.measure = "mse")
+lambda_1se.cip <- cvfit3$lambda.1se
+coef(cvfit3,s=lambda_1se.cip)
+cip_prob <- predict(cvfit3,newx = xtest.cip,s=lambda_1se.cip,type="response")
+cip_predict <- ifelse(cip_prob > 0.5, "1", "0")
+table(pred=cip_predict,true=cip.test$cip_sr)
+mean(cip_predict==cip.test$cip_sr)
+
+# #Calculating Accuracy
+# probabilities3 <- cip.model %>% predict(newx = xtest.cip)
+# predicted.classes3 <- ifelse(probabilities3 > 0.5, "1", "0")
+# # Model accuracy
+# observed.classes3 <- cip.test$cip_sr
+# mean(predicted.classes3 == observed.classes3)
+# table(predicted.classes3,cip.test$cip_sr)
+```
+
+Model accuracy is 96.98% 
