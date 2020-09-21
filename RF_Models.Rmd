@@ -102,11 +102,18 @@ azmRF
 # 
 #   mtry  Accuracy   Kappa     
 #     2   0.8726911  0.01630407
-#   246   0.9733084  0.88249905
-#   490   0.9700179  0.86726412
+#    56   0.9724887  0.87795635
+#   110   0.9745413  0.88857797
+#   164   0.9741314  0.88659404
+#   218   0.9737199  0.88478170
+#   273   0.9724853  0.87941123
+#   327   0.9724853  0.87887356
+#   381   0.9720738  0.87732987
+#   435   0.9716623  0.87565287
+#   490   0.9708409  0.87164823
 # 
 # Accuracy was used to select the optimal model using the largest value.
-# The final value used for the model was mtry = 246.
+# The final value used for the model was mtry = 110.
 ```
 # Save and assess model accuracy
 ```{r}
