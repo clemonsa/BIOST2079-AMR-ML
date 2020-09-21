@@ -138,14 +138,13 @@ azmEN$bestTune
 
 # Fitting the final model on training data using best alpha and lambda
 ```{r}
-
 cvfit = cv.glmnet(data.matrix(azmDS$training[,-1]), azmDS$training$azm_sr, alpha=.6, family="binomial", type.measure = "mse")
 lambda_1se <- cvfit$lambda.1se
 coef(cvfit,s=lambda_1se)
 azm_prob <- predict(cvfit, newx =data.matrix(azmDS$testing[,-1]),s=lambda_1se,type="response")
 azm_predict <- ifelse(azm_prob > 0.5, "0", "1")
 table(pred=azm_predict,true=azmDS$testing$azm_sr)
-mean(azm_predict==azmDS$testing$azm_sr)
+azm.mean<-mean(azm_predict==azmDS$testing$azm_sr)
 
 # Save Model
 saveRDS(azmEN, file = "azmEN_model")
@@ -164,11 +163,11 @@ All alphas and lambda combinations give about the same accuracy level (so using 
 # Fitting the final model on training data using best alpha and lambda
 ```{r}
 
-cvfit2 = cv.glmnet(data.matrix(cfxDS$training[,-1]), cfxDS$training$cfx_sr, alpha=0, family="binomial", type.measure = "mse")
+cvfit2 = cv.glmnet(data.matrix(cfxDS$training[,-1]), cfxDS$training$cfx_sr, alpha=0.6, family="binomial", type.measure = "mse")
 lambda_1se <- cvfit2$lambda.1se
 coef(cvfit2,s=lambda_1se)
 cfx_prob <- predict(cvfit2, newx =data.matrix(cfxDS$testing[,-1]),s=lambda_1se,type="response")
-cfx_predict <- ifelse(cfx_prob > 0.5, "0", "1")
+cfx_predict <- ifelse(cfx_prob > 0.5, "1", "0")
 table(pred=cfx_predict,true=cfxDS$testing$cfx_sr)
 mean(cfx_predict==cfxDS$testing$cfx_sr)
 
@@ -176,7 +175,7 @@ mean(cfx_predict==cfxDS$testing$cfx_sr)
 saveRDS(cfxEN, file = "cfxEN_model")
 ```
 
-Model Accuracy 99.80%
+Model Accuracy 100%
 
 #Finding the best alpha using cross-validation (Elastic Net)
 ```{r}
@@ -199,4 +198,4 @@ mean(cip_predict==cipDS$testing$cip_sr)
 saveRDS(cipEN, file = "cipEN_model")
 ```
 
-Model accuracy is 96.98% 
+Model accuracy is 100%
