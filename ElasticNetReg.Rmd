@@ -25,14 +25,14 @@ library(knitr)
 azm<-read_csv("./unitigs_azm.csv", col_types = cols(.default = col_factor(NULL)))
 azm2 <- azm[,-1] 
 #azm2$azm_sr<- ifelse(azm2$azm_sr == "1", 1, 0)
-rownames(azm2) <- as.character(azm$Sample_ID)
+#rownames(azm2) <- as.character(azm$Sample_ID) #Arvon: Sample_ID already removed
 #azm2<-Filter(function(x)(length(unique(x))>1), azm2)
 cfx<-read_csv("./unitigs_cfx.csv", col_types = cols(.default = col_factor(NULL)))
 cfx2 <- cfx[,-1]
-rownames(cfx2) <- as.character(cfx$Sample_ID)
+#rownames(cfx2) <- as.character(cfx$Sample_ID)
 cip<-read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL)))
 cip2 <- cip[,-1]
-rownames(cip2) <- as.character(cip$Sample_ID)
+#rownames(cip2) <- as.character(cip$Sample_ID)
 ```
 
 ```{r}
@@ -41,14 +41,15 @@ dt = sort(sample(nrow(azm2), nrow(azm2)*.7))
 azm.train<-azm2[dt,]
 azm.test<-azm2[-dt,]
 
-#Getting rid of factors with only one level
-azm.train<-Filter(function(x)(length(unique(x))>1), azm.train)
-azm.test<-Filter(function(x)(length(unique(x))>1), azm.test)
+#Getting rid of factors with only one level 
+## Arvon: I recommend doing this BEFORE splitting
+azm.train<-Filter(function(x)(length(unique(x))>1), azm.train) #Arvon: Is this meant to be the dplyr "filter"?
+azm.test<-Filter(function(x)(length(unique(x))>1), azm.test) #Arvon: Seems this may remove excess features
 #Only keeping columns that are in both azm.train and azm.test
 azm.test<-azm.test[, names(azm.test) %in% colnames(azm.train)]
 azm.train<-azm.train[, names(azm.train) %in% colnames(azm.test)]
 
-ytrain.azm=azm.train$azm_sr
+ytrain.azm=azm.train$azm_sr #Arvon: Receive error, "azm_sr" column doesn't exist. See line 26
 ytest.azm=azm.test$azm_sr
 xtrain.azm=data.matrix(azm.train[,-1])
 xtest.azm=data.matrix(azm.test[,-1])
@@ -152,7 +153,10 @@ set.seed(123)
 grid <- expand.grid(.alpha = seq(0, 1, by = 0.2), .lambda = seq(0.00, 0.2, by = 0.02))
 control <- trainControl("cv", number = 10, #cross-validation
                        allowParallel = TRUE)
+cl <- parallel::makePSOCKcluster(parallel::detectCores()) #set number of cores
+doParallel::registerDoParallel(cl) #Start parallelization
 enet.train <- train(azm_sr ~ ., data = azm.train, method = "glmnet", trControl = control, tuneGrid = grid)
+parallel::stopCluster(cl) #Stop parallelization
 enet.train$bestTune
 enet.train
 ```
