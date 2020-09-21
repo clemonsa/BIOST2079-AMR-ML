@@ -62,7 +62,8 @@ tibble::glimpse(azmDS$training[1:6])
 
 # Function to Train and Fit Random Forest Model (USE CAUTION)!!!
 ```{r}
-trainMethods <- function(training, outcome, method, tunelength=3,seed=05101929, workers = 0, number=10){
+trainMethods <- function(training, outcome, method,
+                         tunegrid = NULL, tunelength=3,seed=05101929, workers = 0, number=10){
   stopifnot(is.character(method), is.object(training), is.character(outcome))
 trCtrl <- caret::trainControl("cv", number = number, #cross-validation
                        allowParallel = TRUE) #parallelization
@@ -75,6 +76,7 @@ set.seed(seed)
   modelRF <- caret::train(as.formula(
     paste0(outcome,"~.")),
     data=training, method=method,
+    tuneGrid = tunegrid,
     tuneLength = tunelength,
     trControl = trCtrl,
     importance = T
@@ -85,8 +87,8 @@ invisible(modelRF)
 }
 
 #Example of using trainMethods()
-cipRF <- trainMethods(cipDS$training, "cip_sr", method = "parRF", tunelength = 10)
-cipRF
+azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", tunelength = 10)
+azmRF
 # Parallel Random Forest 
 # 
 # 2435 samples
@@ -108,9 +110,9 @@ cipRF
 ```
 # Save and assess model accuracy
 ```{r}
-saveRDS(cipRF, file = "cipRF_model") #save model
-predictedAR <- predict(cipRF, cipDS$testing) #full predictions
-mean(predictedAR == cipDS$testing$cip_sr) #assess full model accuracy
+saveRDS(azmRF, file = "azmRF_model") #save model
+predictedAR <- predict(azmRF, azmDS$testing) #full predictions
+mean(predictedAR == azmDS$testing$azm_sr) #assess full model accuracy
 ```
 
 # Import and Split Data
