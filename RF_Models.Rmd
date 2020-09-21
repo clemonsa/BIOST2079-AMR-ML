@@ -120,6 +120,12 @@ azmRF
 saveRDS(azmRF, file = "azmRF_model") #save model
 predictedAR <- predict(azmRF, azmDS$testing) #full predictions
 mean(predictedAR == azmDS$testing$azm_sr) #assess full model accuracy
+table(predictedAR, azmDS$testing$azm_sr) #confusion matrix
+gglot2::ggplot(azmRF)
+```
+#
+```{r}
+
 ```
 
 # Import and Split Data
