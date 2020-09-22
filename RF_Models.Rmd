@@ -87,7 +87,7 @@ invisible(modelRF)
 }
 
 #Example of using trainMethods()
-azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", tunelength = 10)
+azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", tunelength = 15)
 azmRF
 # Parallel Random Forest 
 # 
@@ -102,18 +102,23 @@ azmRF
 # 
 #   mtry  Accuracy   Kappa     
 #     2   0.8726911  0.01630407
-#    56   0.9724887  0.87795635
-#   110   0.9745413  0.88857797
-#   164   0.9741314  0.88659404
-#   218   0.9737199  0.88478170
-#   273   0.9724853  0.87941123
-#   327   0.9724853  0.87887356
-#   381   0.9720738  0.87732987
-#   435   0.9716623  0.87565287
-#   490   0.9708409  0.87164823
+#    36   0.9683870  0.85560386
+#    71   0.9733101  0.88246752
+#   106   0.9737216  0.88456372
+#   141   0.9749511  0.89045073
+#   176   0.9745413  0.88863089
+#   211   0.9733084  0.88305851
+#   245   0.9737182  0.88498361
+#   280   0.9720755  0.87744204
+#   315   0.9720755  0.87744204
+#   350   0.9728968  0.88054653
+#   385   0.9712508  0.87334843
+#   420   0.9716623  0.87535556
+#   455   0.9704294  0.86932190
+#   490   0.9696064  0.86605487
 # 
 # Accuracy was used to select the optimal model using the largest value.
-# The final value used for the model was mtry = 110.
+# The final value used for the model was mtry = 141.
 ```
 # Save and assess model accuracy
 ```{r}
@@ -121,7 +126,7 @@ saveRDS(azmRF, file = "azmRF_model") #save model
 predictedAR <- predict(azmRF, azmDS$testing) #full predictions
 mean(predictedAR == azmDS$testing$azm_sr) #assess full model accuracy
 table(predictedAR, azmDS$testing$azm_sr) #confusion matrix
-gglot2::ggplot(azmRF)
+ggplot2::ggplot(azmRF)
 ```
 #
 ```{r}
