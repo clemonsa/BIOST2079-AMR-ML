@@ -1,0 +1,198 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#Reference code tutorial:
+#uc-r.github.io/svm
+
+
+
+```{r}
+library(tidyverse)
+library(readr)
+
+# read metadata.csv with only "Sample_ID" and "*_sr" features
+metadata <- read_csv("./metadata.csv") %>% 
+  select(Sample_ID,(matches("_sr$")))
+
+# read antibiotic resistance associated unitigs
+unitigs_azm <- read_table2("azm_sr_gwas_filtered_unitigs.Rtab")
+unitigs_cfx <- read_table2("cfx_sr_gwas_filtered_unitigs.Rtab")
+unitigs_cip <- read_table2("cip_sr_gwas_filtered_unitigs.Rtab")
+
+#Function to transpose unitigs table, join metadata, then create .csv file
+unitigs <- function(unitig){
+  
+  # deparse + substitute combo to extract object name
+  unitig_name <- deparse(substitute(unitig))
+  
+  '%>%' <- tidyr::'%>%'
+  
+  unitig %>%
+    # transpose
+    tidyr::pivot_longer(-pattern_id, "Sample_ID", "value") %>% 
+    tidyr::pivot_wider(Sample_ID, pattern_id) %>%
+    # join relevant antibiotic metadata
+    dplyr::inner_join(dplyr::select(metadata, "Sample_ID", dplyr::matches(stringr::str_extract(unitig_name, "[[:alpha:]]+$"))), by = "Sample_ID") %>% 
+    dplyr::select(dplyr::last_col(), dplyr::everything(), -"Sample_ID") %>% 
+    # rename unitigs to format "geneX" where X is a positive integer
+    data.table::setnames(., old = names(.[2:length(.)]), new = paste0('gene', seq_along(.[2:length(.)])), skip_absent = T) %>% 
+    tidyr::drop_na() %>% 
+    # create .csv file
+    readr::write_csv(path=paste0('./', stringr::str_extract(unitig_name,"[[:alpha:]]+[_][[:alpha:]]+"), '.csv'))
+}
+
+# Manual Transpose, join, and create .csv files of azm unitigs
+# unitigs_azm %>%
+#   pivot_longer(-pattern_id, "Sample_ID", "value") %>%
+#   pivot_wider(Sample_ID, pattern_id) %>%
+#   inner_join(select(metadata, "Sample_ID", matches('^azm')), by = "Sample_ID") %>%
+#   select('Sample_ID', last_col(), everything()) %>%
+#   data.table::setnames(., old = names(.[2:length(.)]), new = paste0('gene', seq_along(.[2:length(.)])), skip_absent = T) %>% 
+#   drop_na() %>%
+#   write_csv(path="./unitigs_azm.csv")
+
+# Use 'unitigs' function to create .csv files
+unitigs(unitigs_azm)
+unitigs(unitigs_cfx)
+unitigs(unitigs_cip)
+```
+
+
+
+#Split into training and testing:
+```{r}
+createDS <- function(csvname, percent=0.7, seed=05101929){
+  stopifnot(is.character(csvname))
+  
+  '%>%' <- tidyr::'%>%'
+  
+#Import dataset
+svmData <- readr::read_csv(csvname, col_types = readr::cols(.default = readr::col_factor(NULL))) %>% 
+  dplyr::select_if(sapply(., nlevels) > 1)
+#Split
+set.seed(seed)
+index <- dplyr::select(svmData,dplyr::matches(stringr::str_extract(unlist(stringr::str_split(csvname, "_"))[2],"^[[:alpha:]]+"))) %>% 
+  unlist() %>% 
+  caret::createDataPartition(times = 1, p = percent, list = FALSE)
+
+dfTrain <- svmData %>% dplyr::slice(index) #training dataset
+dfTest <- svmData %>% dplyr::slice(-index) #testing dataset
+
+#return datasets
+dataSets <- list(training = dfTrain, testing = dfTest)
+invisible(dataSets)
+}
+```
+
+#Create dataframes, view:
+
+```{r}
+azmDS <- createDS("./unitigs_azm.csv")
+tibble::glimpse(azmDS$training[1:6])
+```
+
+
+
+#Load in SVM-specific packages:
+
+```{r, results='hide'}
+library(kernlab)
+library(e1071)
+library(ISLR)
+library(RColorBrewer)
+```
+
+#Test SVM model 1: linear assumption
+
+```{r}
+svmfit1 <- svm(azm_sr~., data=azmDS$training, kernel="linear", scale=FALSE)
+svmfit1
+```
+
+
+#Tune the 'cost' parameter to identify optimal misclassification threshold:
+```{r}
+tune.out1 <- tune(svm, azm_sr~., data=azmDS$training, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+(bestmod1 <- tune.out1$best.model)
+```
+
+
+#Low cost identified
+
+#Construct confusion matrix:
+
+```{r}
+ypred1 <- predict(bestmod1, azmDS$training)
+(misclass1 <- table(predict = ypred1, truth = azmDS[[1]][[1]]))
+```
+
+
+#In this model, 
+```{r}
+(290+2085)/(290+2085+23+37)*100
+```
+
+#... percent of observations were identified correctly.
+
+
+
+#Moving on to the testing set:
+
+```{r}
+svmfit2 <- svm(azm_sr~., data=azmDS$testing, kernel="linear", scale=FALSE)
+svmfit2
+```
+
+#Verify cost function:
+```{r}
+tune.out2 <- tune(svm, azm_sr~., data=azmDS$testing, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+(bestmod2 <- tune.out2$best.model)
+```
+
+#Same cost parameter.
+
+```{r}
+ypred2 <- predict(bestmod2, azmDS$testing)
+(misclass2 <- table(predict = ypred2, truth = azmDS[[2]][[1]]))
+```
+
+
+#And in the testing set,
+```{r}
+(127+895)/(127+895+14+7)*100
+```
+
+#... percent of observations were identified correctly.
+
+
+####.
+####Next model set:
+####CIP
+####.
+
+
+
+```{r}
+cipDS <- createDS("./unitigs_cip.csv")
+tibble::glimpse(cipDS$training[1:6])
+```
+
+
+#Model 1: Linear assumption
+
+```{r}
+cipfit1 <- svm(cip_sr~., data=cipDS$training, kernel="linear", scale=FALSE)
+cipfit1
+```
+
+
+#Determing optimal misclassification cost:
+```{r}
+tune.out3 <- tune(svm, cip_sr~., data=cipDS$training, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+(bestmod3 <- tune.out3$best.model)
+```
+
+
+
