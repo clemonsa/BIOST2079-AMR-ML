@@ -5,7 +5,7 @@ output: html_notebook
 
 #Reference code tutorial:
 #uc-r.github.io/svm
-
+#very similar to the lab example in ISLR
 
 
 ```{r}
@@ -102,6 +102,7 @@ library(kernlab)
 library(e1071)
 library(ISLR)
 library(RColorBrewer)
+library(ROCR)
 ```
 
 #Test SVM model 1: linear assumption
@@ -134,7 +135,7 @@ ypred1 <- predict(bestmod1, azmDS$training)
 (290+2085)/(290+2085+23+37)*100
 ```
 
-#... percent of observations were identified correctly.
+#... 97.5% of observations were identified correctly.
 
 
 
@@ -164,7 +165,7 @@ ypred2 <- predict(bestmod2, azmDS$testing)
 (127+895)/(127+895+14+7)*100
 ```
 
-#... percent of observations were identified correctly.
+#... 98% of observations were identified correctly.
 
 
 ####.
@@ -195,4 +196,145 @@ tune.out3 <- tune(svm, cip_sr~., data=cipDS$training, kernel = "linear", ranges=
 ```
 
 
+```{r}
+summary(bestmod3)
+```
 
+
+#Confusion matrix:
+```{r}
+ypred3 <- predict(bestmod3, cipDS$training)
+(misclass3 <- table(predict = ypred3, truth = cipDS[[1]][[1]]))
+```
+
+
+#So the model accurately predicted:
+
+```{r}
+(1157+998)/(1157+998+2+5)*100
+```
+
+#... 99.7% of observations.
+
+
+#Examining the testing set:
+
+```{r}
+cipfit2 <- svm(cip_sr~., data=cipDS$testing, kernel="linear", scale=FALSE)
+cipfit2
+```
+
+
+
+#Testing cost of misclassification:
+```{r}
+tune.out4 <- tune(svm, cip_sr~., data=cipDS$testing, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+(bestmod4 <- tune.out4$best.model)
+```
+
+```{r}
+summary(bestmod4)
+```
+
+
+
+```{r}
+ypred4 <- predict(bestmod4, cipDS$testing)
+(misclass4 <- table(predict = ypred4, truth = cipDS[[2]][[1]]))
+```
+
+
+#So, the model accurately predicted:
+
+
+```{r}
+(494+425)/(494+425+4+3)*100
+```
+
+#...99.2% of observations.
+
+
+
+#What if we cannot assume spread of data can be linearly divided?
+#Have to use an alternate 'kernel' (spatial division) method
+#For non-linear necesseties, radial kernel is a good default option.
+
+#Model 2: radial assumption
+
+
+
+```{r}
+cipfit3 <- svm(cip_sr~., data=cipDS$training, kernel="radial", scale=FALSE)
+cipfit3
+```
+
+
+```{r}
+tune.out5 <- tune(svm, cip_sr~., data=cipDS$training, kernel = "radial", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+(bestmod5 <- tune.out5$best.model)
+```
+
+
+
+
+```{r}
+summary(bestmod5)
+```
+
+
+
+```{r}
+ypred5 <- predict(bestmod5, cipDS$training)
+(misclass5 <- table(predict = ypred5, truth = cipDS[[1]][[1]]))
+```
+
+
+#So, the model accurately predicted:
+
+```{r}
+(1146+993)/(1146+993+7+16)*100
+```
+
+
+#... 98.9% of observations
+
+
+
+#Evaluating the test set:
+
+
+```{r}
+cipfit4 <- svm(cip_sr~., data=cipDS$testing, kernel="radial", scale=FALSE)
+cipfit4
+```
+
+
+
+#Testing the optimal misclassification penalty:
+
+```{r}
+tune.out6 <- tune(svm, cip_sr~., data=cipDS$testing, kernel = "radial", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+(bestmod6 <- tune.out6$best.model)
+```
+
+
+#A high misclassification cost was found.
+
+```{r}
+summary(bestmod6)
+```
+
+
+```{r}
+ypred6 <- predict(bestmod6, cipDS$testing)
+(misclass6 <- table(predict = ypred6, truth = cipDS[[2]][[1]]))
+```
+
+#So, the model accurately predicted:
+
+```{r}
+(497+427)/(497+427+1+1)*100
+```
+
+
+#...99.8% of observations.
