@@ -108,15 +108,25 @@ library(ROCR)
 #Test SVM model 1: linear assumption
 
 ```{r}
-svmfit1 <- svm(azm_sr~., data=azmDS$training, kernel="linear", scale=FALSE)
+set.seed(05101929)
+svmfit1 <- e1071::svm(azm_sr~., data=azmDS$training, kernel="linear", scale=FALSE)
 svmfit1
 ```
 
 
 #Tune the 'cost' parameter to identify optimal misclassification threshold:
 ```{r}
-tune.out1 <- tune(svm, azm_sr~., data=azmDS$training, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+set.seed(05101929)
+tune.out1 <- e1071::tune(e1071::svm, azm_sr~., data=azmDS$training, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
 (bestmod1 <- tune.out1$best.model)
+```
+
+# Caret pckage mimicry of the above
+```{r}
+library(caret)
+set.seed(05101929)
+caretFit <- train(azm_sr~., data=azmDS$training, method= 'svmLinear2', trControl = trainControl("cv", number = 10), tuneGrid = expand.grid(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)), scale = FALSE)
+caretFit
 ```
 
 
@@ -125,14 +135,47 @@ tune.out1 <- tune(svm, azm_sr~., data=azmDS$training, kernel = "linear", ranges=
 #Construct confusion matrix:
 
 ```{r}
-ypred1 <- predict(bestmod1, azmDS$training)
-(misclass1 <- table(predict = ypred1, truth = azmDS[[1]][[1]]))
+ypred1 <- predict(bestmod1, azmDS$testing)
+ypred2 <- predict(caretFit, azmDS$testing)
+(misclass1 <- table(predict = ypred1, truth = azmDS[[2]][[1]]))
+(misclass1 <- table(predict = ypred2, truth = azmDS[[2]][[1]]))
 ```
 
+Now that it is confirmed that `caret` can achieve the same results will implement below wrapper function:
+```{r}
+trainMethods <- function(training, outcome, method,
+                         seed=05101929, workers = 0, number=10, ...){
+  stopifnot(is.character(method), is.object(training), is.character(outcome))
+trCtrl <- caret::trainControl("cv", number = number, #cross-validation
+                       allowParallel = TRUE) #parallelization
+
+cl <- parallel::makePSOCKcluster(ifelse(workers, workers, parallel::detectCores())) #set number of cores
+doParallel::registerDoParallel(cl)
+set.seed(seed)
+
+#training and fitting model
+  modelRF <- caret::train(as.formula(
+    paste0(outcome,"~.")),
+    data=training, method=method,
+    trControl = trCtrl,
+    importance = T,
+    ...
+  )
+parallel::stopCluster(cl)
+
+invisible(modelRF)
+}
+
+#Example of using trainMethods()
+azmSVM <- trainMethods(azmDS$training, "azm_sr", method = "svmLinear2", 
+                       tuneGrid = expand.grid(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)),
+                       scale = FALSE)
+azmSVM
+```
 
 #In this model, 
 ```{r}
-(290+2085)/(290+2085+23+37)*100
+(121+891) / (121 + 891 + 13 + 18)*100
 ```
 
 #... 97.5% of observations were identified correctly.
@@ -141,27 +184,29 @@ ypred1 <- predict(bestmod1, azmDS$training)
 
 #Moving on to the testing set:
 
-```{r}
+```{r, eval= FALSE}
+set.seed(05101929)
 svmfit2 <- svm(azm_sr~., data=azmDS$testing, kernel="linear", scale=FALSE)
 svmfit2
 ```
 
 #Verify cost function:
-```{r}
+```{r, eval= FALSE}
+set.seed(05101929)
 tune.out2 <- tune(svm, azm_sr~., data=azmDS$testing, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
 (bestmod2 <- tune.out2$best.model)
 ```
 
 #Same cost parameter.
 
-```{r}
+```{r, eval= FALSE}
 ypred2 <- predict(bestmod2, azmDS$testing)
 (misclass2 <- table(predict = ypred2, truth = azmDS[[2]][[1]]))
 ```
 
 
 #And in the testing set,
-```{r}
+```{r, eval= FALSE}
 (127+895)/(127+895+14+7)*100
 ```
 
@@ -184,27 +229,16 @@ tibble::glimpse(cipDS$training[1:6])
 #Model 1: Linear assumption
 
 ```{r}
-cipfit1 <- svm(cip_sr~., data=cipDS$training, kernel="linear", scale=FALSE)
-cipfit1
+cipSVM <- trainMethods(cipDS$training, "cip_sr", method = "svmLinear2", 
+                       tuneGrid = expand.grid(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)),
+                       scale = FALSE)
+cipSVM
 ```
-
-
-#Determing optimal misclassification cost:
-```{r}
-tune.out3 <- tune(svm, cip_sr~., data=cipDS$training, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
-(bestmod3 <- tune.out3$best.model)
-```
-
-
-```{r}
-summary(bestmod3)
-```
-
 
 #Confusion matrix:
 ```{r}
-ypred3 <- predict(bestmod3, cipDS$training)
-(misclass3 <- table(predict = ypred3, truth = cipDS[[1]][[1]]))
+ypred3 <- predict(cipSVM, cipDS$testing)
+(misclass3 <- table(predict = ypred3, truth = cipDS[[2]][[1]]))
 ```
 
 
@@ -216,33 +250,9 @@ ypred3 <- predict(bestmod3, cipDS$training)
 
 #... 99.7% of observations.
 
+### CIP Testing Stuff Below:
 
-#Examining the testing set:
-
-```{r}
-cipfit2 <- svm(cip_sr~., data=cipDS$testing, kernel="linear", scale=FALSE)
-cipfit2
-```
-
-
-
-#Testing cost of misclassification:
-```{r}
-tune.out4 <- tune(svm, cip_sr~., data=cipDS$testing, kernel = "linear", ranges=list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
-(bestmod4 <- tune.out4$best.model)
-```
-
-```{r}
-summary(bestmod4)
-```
-
-
-
-```{r}
-ypred4 <- predict(bestmod4, cipDS$testing)
-(misclass4 <- table(predict = ypred4, truth = cipDS[[2]][[1]]))
-```
-
+Note: Removed since training models on testing data and measuring prediction accuracy on testing data isn't informative, unless there is something I am missing. - Arvon
 
 #So, the model accurately predicted:
 
@@ -254,12 +264,12 @@ ypred4 <- predict(bestmod4, cipDS$testing)
 #...99.2% of observations.
 
 
-
 #What if we cannot assume spread of data can be linearly divided?
 #Have to use an alternate 'kernel' (spatial division) method
 #For non-linear necesseties, radial kernel is a good default option.
 
 #Model 2: radial assumption
+
 
 
 
@@ -274,7 +284,13 @@ tune.out5 <- tune(svm, cip_sr~., data=cipDS$training, kernel = "radial", ranges=
 (bestmod5 <- tune.out5$best.model)
 ```
 
-
+## Presumed caret package mimicry
+```{r}
+cipSVM2 <- trainMethods(cipDS$training, "cip_sr", method = "svmRadialCost", 
+                       tuneGrid = expand.grid(C = c(0.001, 0.01, 0.1, 1, 5, 10, 100)),
+                       scale = FALSE)
+cipSVM2
+```
 
 
 ```{r}
