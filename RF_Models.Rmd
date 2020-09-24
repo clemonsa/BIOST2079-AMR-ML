@@ -63,7 +63,7 @@ tibble::glimpse(azmDS$training[1:6])
 # Function to Train and Fit Random Forest Model (USE CAUTION)!!!
 ```{r}
 trainMethods <- function(training, outcome, method,
-                         tunegrid = NULL, tunelength=3,seed=05101929, workers = 0, number=10){
+                         seed=05101929, workers = 0, number=10, ...){
   stopifnot(is.character(method), is.object(training), is.character(outcome))
 trCtrl <- caret::trainControl("cv", number = number, #cross-validation
                        allowParallel = TRUE) #parallelization
@@ -76,10 +76,9 @@ set.seed(seed)
   modelRF <- caret::train(as.formula(
     paste0(outcome,"~.")),
     data=training, method=method,
-    tuneGrid = tunegrid,
-    tuneLength = tunelength,
     trControl = trCtrl,
-    importance = T
+    importance = T,
+    ...
   )
 parallel::stopCluster(cl)
 
