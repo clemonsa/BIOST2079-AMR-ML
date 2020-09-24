@@ -105,7 +105,7 @@ debug_contr_error <- function (dat, subset_vec = NULL) {
 
 ```{r}
 trainMethods <- function(training, outcome, method,
-                         tunegrid = NULL, tunelength=3,seed=05101929, workers = 0, number=10){
+                         seed=05101929, workers = 0, number=10, ...){
   stopifnot(is.character(method), is.object(training), is.character(outcome))
 trCtrl <- caret::trainControl("cv", number = number, #cross-validation
                        allowParallel = TRUE) #parallelization
@@ -118,10 +118,9 @@ set.seed(seed)
   modelRF <- caret::train(as.formula(
     paste0(outcome,"~.")),
     data=training, method=method,
-    tuneGrid = tunegrid,
-    tuneLength = tunelength,
     trControl = trCtrl,
-    importance = T
+    importance = T,
+    ...
   )
 parallel::stopCluster(cl)
 
@@ -130,10 +129,10 @@ invisible(modelRF)
 
 # Run trainMethods
 grid <- expand.grid(.alpha = seq(0, 1, by = 0.2), .lambda = seq(0.00, 0.2, by = 0.02))
-azmEN <- trainMethods(azmDS$training, "azm_sr", method = "glmnet", tunegrid = grid)
+azmEN <- trainMethods(azmDS$training, "azm_sr", method = "glmnet", tuneGrid = grid)
 azmEN$bestTune
 ```
-0.6	0.02	
+`r azmEN$bestTune`	
 
 
 # Fitting the final model on training data using best alpha and lambda
@@ -149,13 +148,13 @@ azm.mean<-mean(azm_predict==azmDS$testing$azm_sr)
 # Save Model
 saveRDS(azmEN, file = "azmEN_model")
 ```
-Model Accuracy is 100%
+Model Accuracy is `r azm.mean*100`%
 
 
 #Finding the best alpha using cross-validation (Elastic Net)
 ```{r}
 # Run trainMethods
-cfxEN <- trainMethods(cfxDS$training, "cfx_sr", method = "glmnet", tunegrid = grid)
+cfxEN <- trainMethods(cfxDS$training, "cfx_sr", method = "glmnet", tuneGrid = grid)
 cfxEN$bestTune
 ```
 All alphas and lambda combinations give about the same accuracy level (so using a value between 0 and 1 for elastic net)
@@ -169,21 +168,21 @@ coef(cvfit2,s=lambda_1se)
 cfx_prob <- predict(cvfit2, newx =data.matrix(cfxDS$testing[,-1]),s=lambda_1se,type="response")
 cfx_predict <- ifelse(cfx_prob > 0.5, "1", "0")
 table(pred=cfx_predict,true=cfxDS$testing$cfx_sr)
-mean(cfx_predict==cfxDS$testing$cfx_sr)
+cfx.mean <- mean(cfx_predict==cfxDS$testing$cfx_sr)
 
 # Save Model
 saveRDS(cfxEN, file = "cfxEN_model")
 ```
 
-Model Accuracy 100%
+Model Accuracy `r cfx.mean*100`%
 
 #Finding the best alpha using cross-validation (Elastic Net)
 ```{r}
 # Run trainMethods
-cipEN <- trainMethods(cipDS$training, "cip_sr", method = "glmnet", tunegrid = grid)
+cipEN <- trainMethods(cipDS$training, "cip_sr", method = "glmnet", tuneGrid = grid)
 cipEN$bestTune
 ```
-.8 0.06
+`r cipEN$bestTune`
 # Fitting the final model on training data using best alpha and lambda
 ```{r}
 cvfit3 = cv.glmnet(data.matrix(cipDS$training[,-1]), cipDS$training$cip_sr, alpha=.8, family="binomial", type.measure = "mse")
@@ -192,10 +191,10 @@ coef(cvfit3,s=lambda_1se)
 cip_prob <- predict(cvfit3, newx =data.matrix(cipDS$testing[,-1]),s=lambda_1se,type="response")
 cip_predict <- ifelse(cip_prob > 0.5, "1", "0")
 table(pred=cip_predict,true=cipDS$testing$cip_sr)
-mean(cip_predict==cipDS$testing$cip_sr)
+cip.mean <- mean(cip_predict==cipDS$testing$cip_sr)
 
 # Save Model
 saveRDS(cipEN, file = "cipEN_model")
 ```
 
-Model accuracy is 100%
+Model accuracy is `r cip.mean*100`%
