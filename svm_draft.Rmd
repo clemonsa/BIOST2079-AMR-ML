@@ -10,7 +10,6 @@ output: html_notebook
 
 ```{r}
 library(tidyverse)
-library(readr)
 
 # read metadata.csv with only "Sample_ID" and "*_sr" features
 metadata <- read_csv("./metadata.csv") %>% 
@@ -165,22 +164,87 @@ parallel::stopCluster(cl)
 
 invisible(modelRF)
 }
+```
 
+```{r}
 #Example of using trainMethods()
 azmSVM <- trainMethods(azmDS$training, "azm_sr", method = "svmLinear2", 
-                       tuneGrid = expand.grid(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)),
+                       tuneGrid = expand.grid(cost = seq.int(0.00, 0.1, by = 0.01)),
                        scale = FALSE)
 azmSVM
 ```
 
 #In this model, 
 ```{r}
-(121+891) / (121 + 891 + 13 + 18)*100
+azm_predict <- predict(azmSVM, azmDS$testing)
+table(pred=azm_predict,true=azmDS$testing$azm_sr)
+azm.mean <- mean(azm_predict==azmDS$testing$azm_sr)
 ```
 
-#... 97.5% of observations were identified correctly.
+#... `r azm.mean` of observations were identified correctly.
 
+# Saving Model
+```{r}
+saveRDS(azmSVM, file = "azmSVM_model")
+```
 
+# Ciprofloxacin Model
+
+## Create dataframes, view:
+
+```{r}
+cipDS <- createDS("./unitigs_cip.csv")
+tibble::glimpse(cipDS$training[1:6])
+```
+
+## Build
+```{r}
+cipSVM <- trainMethods(cipDS$training, "cip_sr", method = "svmLinear2", 
+                       tuneGrid = expand.grid(cost = seq.int(0.00, 0.1, by = 0.01)),
+                       scale = FALSE)
+cipSVM
+```
+
+## Prediction, Confusion Matrix, and Accuracy Assessment
+```{r}
+cip_predict <- predict(cipSVM, cipDS$testing)
+table(pred=cip_predict,true=cipDS$testing$cip_sr)
+cip.mean <- mean(cip_predict==cipDS$testing$cip_sr)
+```
+
+## Saving Model
+```{r}
+saveRDS(cipSVM, file = "cipSVM_model")
+```
+
+# Cefoxatin Model
+
+## Create dataframes, view:
+
+```{r}
+cfxDS <- createDS("./unitigs_cfx.csv")
+tibble::glimpse(cfxDS$training[1:6])
+```
+
+## Build
+```{r}
+cfxSVM <- trainMethods(cfxDS$training, "cfx_sr", method = "svmLinear2", 
+                       tuneGrid = expand.grid(cost = seq.int(0.00, 0.1, by = 0.01)),
+                       scale = FALSE)
+cfxSVM
+```
+
+## Prediction, Confusion Matrix, and Accuracy Assessment
+```{r}
+cfx_predict <- predict(cfxSVM, cfxDS$testing)
+table(pred=cfx_predict,true=cfxDS$testing$cfx_sr)
+cfx.mean <- mean(cfx_predict==cfxDS$testing$cfx_sr)
+```
+
+## Saving Model
+```{r}
+saveRDS(cfxSVM, file = "cfxSVM_model")
+```
 
 #Moving on to the testing set:
 
@@ -230,7 +294,7 @@ tibble::glimpse(cipDS$training[1:6])
 
 ```{r}
 cipSVM <- trainMethods(cipDS$training, "cip_sr", method = "svmLinear2", 
-                       tuneGrid = expand.grid(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)),
+                       tuneGrid = expand.grid(cost = seq.int(0.00, 0.1, by = 0.01)),
                        scale = FALSE)
 cipSVM
 ```
