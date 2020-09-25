@@ -115,10 +115,10 @@ tibble::glimpse(azmDS$training[1:6])
 
 # Function to Train and Fit Random Forest Model (USE CAUTION)!!!
 ```{r}
-trainMethods <- function(training, outcome, method,
-                         metric = "ROC", seed=05101929, workers = 0, number=10, ...){
-  stopifnot(is.character(method), is.object(training), is.character(outcome))
-trCtrl <- caret::trainControl("cv", number = number, #cross-validation
+trainMethods <- function(training, outcome,
+                         seed=05101929, workers = 0, ...){
+  stopifnot(is.object(training), is.character(outcome))
+trCtrl <- caret::trainControl(method = "cv", number = 10, #cross-validation
                        allowParallel = TRUE, #parallelization
                        summaryFunction = twoClassSummary,
                        classProbs = TRUE) #class probabilities
@@ -130,8 +130,9 @@ set.seed(seed)
 #training and fitting model
   modelRF <- caret::train(as.formula(
     paste0(outcome,"~.")),
-    data=training, method=method,
+    data=training,
     trControl = trCtrl,
+    metric = "ROC",
     importance = T,
     ...
   )
@@ -141,7 +142,7 @@ invisible(modelRF)
 }
 
 #Example of using trainMethods()
-azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", workers = 8, tuneLength = 15)
+azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", tuneLength = 15)
 azmRF
 # Parallel Random Forest 
 # 
