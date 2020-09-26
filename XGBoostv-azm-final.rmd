@@ -1,0 +1,208 @@
+---
+title: "XGBoost"
+author: "Valerio Tonelli Enrico"
+date: "9/18/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(xgboost)
+library(DiagrammeR)
+library(dials)
+library(workflows)
+library(cvAUC)
+library(randomForest)
+library(mice)
+```
+
+```{r}
+mice(data = data)
+```
+
+```{r}
+createDS <- function(csvname, percent=0.7, seed=05101929){
+  stopifnot(is.character(csvname))
+  
+  '%>%' <- tidyr::'%>%'
+  
+#Import dataset
+rfData <- readr::read_csv(csvname, col_types = readr::cols(.default = readr::col_factor(NULL))) %>% 
+  dplyr::select_if(sapply(., nlevels) > 1)
+#Split
+set.seed(seed)
+index <- dplyr::select(rfData,dplyr::matches(stringr::str_extract(unlist(stringr::str_split(csvname, "_"))[2],"^[[:alpha:]]+"))) %>% 
+  unlist() %>% 
+  caret::createDataPartition(times = 1, p = percent, list = FALSE)
+
+dfTrain <- rfData %>% dplyr::slice(index) #training dataset
+dfTest <- rfData %>% dplyr::slice(-index) #testing dataset
+
+#return datasets
+dataSets <- list(training = dfTrain, testing = dfTest)
+invisible(dataSets)
+}
+
+#Example of using createDS()
+azmDS <- createDS("./unitigs_azm.csv")
+tibble::glimpse(azmDS$training[1:6])
+```
+
+
+```{r}
+#set.seed(111)
+#dt = sort(sample(nrow(azm), nrow(azm)*.5))
+#azm.train<-azm[dt,]
+#azm.test<-azm[-dt,]
+xtrain.azm <- model.matrix (as.formula(azm_sr~.),azmDS$training)
+xtest.azm <- model.matrix (azm_sr~.,azmDS$testing)
+ytrain.azm <- azmDS$training$azm_sr
+ytest.azm <- azmDS$testing$azm_sr
+
+ytrain.azm <- 2 - as.numeric(ytrain.azm)
+ytest.azm <- 2 - as.numeric(ytest.azm)
+
+# change to numeric values of 0 and 1s
+# class(ytest.azm)
+# class(2 - as.numeric(ytest.azm)) # numeric
+
+#label <- as.numeric(as.character(cfx.train$cfx_sr))
+```
+
+```{r}
+xgboost:::depr_par_lut
+modelXGazm <- xgboost(
+  data = xtrain.azm,
+  nrounds = 777,
+  label = ytrain.azm,
+  objective = "binary:logistic"
+)
+```
+xgboost:::predict.xgb.Booster
+```{r}
+
+predictXGazm <- predict(
+  modelXGazm, 
+  xtest.azm, 
+)
+cbind(round(predictXGazm, 2), 2 - as.numeric(ytest.azm))
+AUC(predictXGazm, 2 - as.numeric(ytest.azm))
+
+
+err.azm <- mean(as.numeric(predictXGazm > 0.5) != 2 - as.numeric(ytest.azm))
+print(paste("test-error=", err.azm))
+```
+
+```{r}
+
+predictXGazm <- predict(
+  modelXGazm, 
+  xtest.azm, 
+)
+err.azm <- mean(as.numeric(predictXGazm > 0.5) != ytest.azm)
+print(paste("test-error=", err.azm))
+```
+
+
+```{r}
+tuned.azm <- xgboost(data = xtrain.azm, # the data           
+                 max.depth = 5, # the maximum depth of each decision tree
+                 nround = 100, # max number of boosting iterations
+                 label = ytrain.azm
+                 )  
+
+# generate predictions for our held-out testing data
+pred.tuned.azm <- predict(tuned.azm, xtest.azm)
+
+# get & print the classification error
+err.tuned.azm <- mean(as.numeric(pred.tuned.azm > 0.5) != ytest.azm)
+print(paste("test-error=", err.tuned.azm))
+```
+
+```{r}
+tuned.azm <- xgboost(data = xtrain.azm, # the data           
+                 max.depth = 5, # the maximum depth of each decision tree
+                 min_child_weight = 10 , #A smaller value is chosen because it is a highly imbalanced class problem and leaf nodes can have smaller size groups.
+                gamma = 0.1 , #A smaller value like 0.1-0.2 can also be chosen for starting. This will anyways be tuned later.
+                colsample_bytree = 0.9,  #This is a commonly used used start value. Typical values range between 0.5-0.9.
+                scale_pos_weight = 1, #Because of high class imbalance.
+                 nround = 777, # max number of boosting iterations
+                objective = "binary:logistic",
+                verbose = 0,
+                 label = ytrain.azm
+                 )  
+
+# generate predictions for our held-out testing data
+pred.tuned.azm <- predict(tuned.azm, xtest.azm)
+
+# get & print the classification error
+err.tuned.azm <- mean(as.numeric(pred.tuned.azm > 0.5) != ytest.azm)
+print(paste("test-error=", err.tuned.azm))
+#"test-error= 0.031627372052904"
+```
+
+```{r}
+tuned.azm <- xgboost(data = xtrain.azm, # the data           
+                 max.depth = 5, # the maximum depth of each decision tree
+                 min_child_weight = 1 , #A smaller value is chosen because it is a highly imbalanced class problem and leaf nodes can have smaller size groups.
+                gamma = 0.2 , #A smaller value like 0.1-0.2 can also be chosen for starting. This will anyways be tuned later.
+                colsample_bytree = 0.9,  #This is a commonly used used start value. Typical values range between 0.5-0.9.
+                scale_pos_weight = 1, #Because of high class imbalance.
+                 nround = 777, # max number of boosting iterations
+                 label = ytrain.azm
+                 )  
+
+# generate predictions for our held-out testing data
+pred.tuned.azm <- predict(tuned.azm, xtest.azm)
+
+# get & print the classification error
+err.tuned.azm <- mean(as.numeric(pred.tuned.azm > 0.5) != ytest.azm)
+print(paste("test-error=", err.tuned.azm))
+#"test-error= 0.031627372052904"
+```
+
+```{r}
+# get information on how important each feature is
+importance_matrix <- xgb.importance(names(xtest.azm), model = tuned.azm)
+
+# and plot
+xgb.plot.importance(importance_matrix)
+```
+
+```{r}
+xgb.plot.multi.trees(feature_names = names(xtrain.azm), 
+                     model = tuned.azm)
+```
+
+```{r}
+xgb.plot.tree(
+  model = tuned.azm, 
+  )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,176 @@
+---
+title: "XGBoost"
+author: "Valerio Tonelli Enrico"
+date: "9/18/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(xgboost)
+library(DiagrammeR)
+library(dials)
+library(workflows)
+library(cvAUC)
+
+```
+
+```{r}
+createDS <- function(csvname, percent=0.7, seed=05101929){
+  stopifnot(is.character(csvname))
+  
+  '%>%' <- tidyr::'%>%'
+  
+#Import dataset
+rfData <- readr::read_csv(csvname, col_types = readr::cols(.default = readr::col_factor(NULL))) %>% 
+  dplyr::select_if(sapply(., nlevels) > 1)
+#Split
+set.seed(seed)
+index <- dplyr::select(rfData,dplyr::matches(stringr::str_extract(unlist(stringr::str_split(csvname, "_"))[2],"^[[:alpha:]]+"))) %>% 
+  unlist() %>% 
+  caret::createDataPartition(times = 1, p = percent, list = FALSE)
+
+dfTrain <- rfData %>% dplyr::slice(index) #training dataset
+dfTest <- rfData %>% dplyr::slice(-index) #testing dataset
+
+#return datasets
+dataSets <- list(training = dfTrain, testing = dfTest)
+invisible(dataSets)
+}
+
+#Example of using createDS()
+cipDS <- createDS("./unitigs_cip.csv")
+tibble::glimpse(cipDS$training[1:6])
+```
+
+```{r}
+#set.seed(111)
+#dt = sort(sample(nrow(cip), nrow(cip)*.5))
+#cip.train<-cip[dt,]
+#cip.test<-cip[-dt,]
+xtrain.cip <- model.matrix (as.formula(cip_sr~.),cipDS$training)
+xtest.cip <- model.matrix (cip_sr~.,cipDS$testing)
+ytrain.cip <- cipDS$training$cip_sr
+ytest.cip <- cipDS$testing$cip_sr
+
+ytest.cip <- as.numeric(ytest.cip)
+ytrain.cip <- as.numeric(ytrain.cip)
+ytrain.cip <- 2 - as.numeric(ytrain.cip)
+ytest.cip <- 2 - as.numeric(ytest.cip)
+
+# change to numeric values of 0 and 1s
+# class(ytest.cip)
+# class(2 - as.numeric(ytest.cip)) # numeric
+
+#label <- as.numeric(as.character(cip.train$cip_sr))
+```
+
+```{r}
+xgboost:::depr_par_lut
+modelXGcip <- xgboost(
+  data = xtrain.cip,
+  nrounds = 55,
+  label = ytrain.cip,
+  objective = "binary:logistic",
+  verbose = 0,
+  early_stopping_round=33
+)
+```
+xgboost:::predict.xgb.Booster
+```{r}
+
+predictXGcip <- predict(
+  modelXGcip, 
+  xtest.cip, 
+)
+# cbind(round(predictXGcip, 2), 2 - as.numeric(ytest.cip))
+# AUC(predictXGcip, 2 - as.numeric(ytest.cip))
+
+err.cip <- mean(as.numeric(predictXGcip > 0.5) != ytest.cip)
+print(paste("test-error=", err.cip))
+```
+
+```{r}
+tuned.cip <- xgboost(data = xtrain.cip, # the data           
+                 max.depth = 5, # the maximum depth of each decision tree
+                 nround = 100, # max number of boosting iterations
+                 label = ytrain.cip
+                 )  
+
+# generate predictions for our held-out testing data
+pred.tuned.cip <- predict(tuned.cip, xtest.cip)
+
+# get & print the classification error
+err.tuned.cip <- mean(as.numeric(pred.tuned.cip > 0.5) != ytest.cip)
+print(paste("test-error=", err.tuned.cip))
+```
+
+```{r}
+tuned.cip <- xgboost(data = xtrain.cip, # the data           
+                 max.depth = 5, # the maximum depth of each decision tree
+                 min_child_weight = 5, #A smaller value is chosen because it is a highly imbalanced class                     problem and leaf nodes can have smaller size groups.
+                gamma = 0.1 , #A smaller value like 0.1-0.2 can also be chosen for starting. This will                          anyways be tuned later.
+                colsample_bytree = 0.5,  #This is a commonly used used start value. Typical values range                       between 0.5-0.9.
+                scale_pos_weight = 1, #Because of high class imbalance.
+                 nround = 55, # max number of boosting iterations
+                early_stopping_round=33,
+                objective = "binary:logistic",
+                verbose = 0,
+                 label = ytrain.cip
+                 )  
+
+# generate predictions for our held-out testing data
+pred.tuned.cip <- predict(tuned.cip, xtest.cip)
+
+# get & print the classification error
+err.tuned.cip <- mean(as.numeric(pred.tuned.cip > 0.5) != ytest.cip)
+print(paste("test-error=", err.tuned.cip))
+#"test-error= 0.031627372052904"
+```
+
+
+```{r}
+# get information on how important each feature is
+importance_matrix <- xgb.importance(names(xtest.cip), model = tuned.cip)
+
+# and plot
+xgb.plot.importance(importance_matrix)
+```
+
+```{r}
+xgb.plot.multi.trees(feature_names = names(xtrain.cip), 
+                     model = tuned.cip)
+```
+
+```{r}
+xgb.plot.tree(
+  model = tuned.cip, 
+  )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
