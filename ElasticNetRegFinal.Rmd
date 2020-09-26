@@ -12,8 +12,6 @@ knitr::opts_chunk$set(echo = TRUE)
 # Libraries
 ```{r}
 library(tidyverse)
-library(readr)
-library(ggplot2)
 library(caret)
 library(glmnet)
 library(knitr)
@@ -104,11 +102,13 @@ debug_contr_error <- function (dat, subset_vec = NULL) {
 ```
 
 ```{r}
-trainMethods <- function(training, outcome, method,
-                         seed=05101929, workers = 0, number=10, ...){
-  stopifnot(is.character(method), is.object(training), is.character(outcome))
-trCtrl <- caret::trainControl("cv", number = number, #cross-validation
-                       allowParallel = TRUE) #parallelization
+trainMethods <- function(training, outcome,
+                         seed=05101929, workers = 0, ...){
+  stopifnot(is.object(training), is.character(outcome))
+trCtrl <- caret::trainControl(method = "cv", number = 10, #cross-validation
+                       allowParallel = TRUE, #parallelization
+                       summaryFunction = twoClassSummary,
+                       classProbs = TRUE) #class probabilities
 
 cl <- parallel::makePSOCKcluster(ifelse(workers, workers, parallel::detectCores())) #set number of cores
 doParallel::registerDoParallel(cl)
@@ -117,8 +117,9 @@ set.seed(seed)
 #training and fitting model
   modelRF <- caret::train(as.formula(
     paste0(outcome,"~.")),
-    data=training, method=method,
+    data=training,
     trControl = trCtrl,
+    metric = "ROC",
     importance = T,
     ...
   )
@@ -137,12 +138,12 @@ azmEN$bestTune
 
 # Fitting the final model on training data using best alpha and lambda
 ```{r}
-cvfit = cv.glmnet(data.matrix(azmDS$training[,-1]), azmDS$training$azm_sr, alpha=.6, family="binomial", type.measure = "mse")
+cvfit = cv.glmnet(data.matrix(azmDS$training[,-1]), azmDS$training$azm_sr, alpha=0, family="binomial", type.measure = "mse")
 lambda_1se <- cvfit$lambda.1se
-coef(cvfit,s=lambda_1se)
+# coef(cvfit,s=lambda_1se)
 azm_prob <- predict(cvfit, newx =data.matrix(azmDS$testing[,-1]),s=lambda_1se,type="response")
-azm_predict <- ifelse(azm_prob > 0.5, "0", "1")
-table(pred=azm_predict,true=azmDS$testing$azm_sr)
+azm_predict <- as.factor(ifelse(azm_prob > 0.5, "neg", "pos"))
+confusionMatrix(azm_predict,azmDS$testing$azm_sr)
 azm.mean<-mean(azm_predict==azmDS$testing$azm_sr)
 
 # Save Model
@@ -162,12 +163,12 @@ All alphas and lambda combinations give about the same accuracy level (so using 
 # Fitting the final model on training data using best alpha and lambda
 ```{r}
 
-cvfit2 = cv.glmnet(data.matrix(cfxDS$training[,-1]), cfxDS$training$cfx_sr, alpha=0.6, family="binomial", type.measure = "mse")
+cvfit2 = cv.glmnet(data.matrix(cfxDS$training[,-1]), cfxDS$training$cfx_sr, alpha=0, family="binomial", type.measure = "mse")
 lambda_1se <- cvfit2$lambda.1se
 coef(cvfit2,s=lambda_1se)
 cfx_prob <- predict(cvfit2, newx =data.matrix(cfxDS$testing[,-1]),s=lambda_1se,type="response")
-cfx_predict <- ifelse(cfx_prob > 0.5, "1", "0")
-table(pred=cfx_predict,true=cfxDS$testing$cfx_sr)
+cfx_predict <- as.factor(ifelse(cfx_prob > 0.5, "pos", "neg"))
+confusionMatrix(cfx_predict,cfxDS$testing$cfx_sr)
 cfx.mean <- mean(cfx_predict==cfxDS$testing$cfx_sr)
 
 # Save Model
@@ -185,12 +186,12 @@ cipEN$bestTune
 `r cipEN$bestTune`
 # Fitting the final model on training data using best alpha and lambda
 ```{r}
-cvfit3 = cv.glmnet(data.matrix(cipDS$training[,-1]), cipDS$training$cip_sr, alpha=.8, family="binomial", type.measure = "mse")
+cvfit3 = cv.glmnet(data.matrix(cipDS$training[,-1]), cipDS$training$cip_sr, alpha=0.2, family="binomial", type.measure = "mse")
 lambda_1se <- cvfit3$lambda.1se
 coef(cvfit3,s=lambda_1se)
 cip_prob <- predict(cvfit3, newx =data.matrix(cipDS$testing[,-1]),s=lambda_1se,type="response")
-cip_predict <- ifelse(cip_prob > 0.5, "1", "0")
-table(pred=cip_predict,true=cipDS$testing$cip_sr)
+cip_predict <- as.factor(ifelse(cip_prob < 0.5, "neg", "pos"))
+confusionMatrix(cip_predict,cipDS$testing$cip_sr)
 cip.mean <- mean(cip_predict==cipDS$testing$cip_sr)
 
 # Save Model
