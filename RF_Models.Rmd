@@ -142,38 +142,38 @@ invisible(modelRF)
 }
 
 #Example of using trainMethods()
-azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", tuneLength = 15)
+azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", workers = 8, tuneLength = 15)
 azmRF
 # Parallel Random Forest 
 # 
 # 2435 samples
 #  490 predictor
-#    2 classes: '1', '0' 
+#    2 classes: 'pos', 'neg' 
 # 
 # No pre-processing
 # Resampling: Cross-Validated (10 fold) 
 # Summary of sample sizes: 2191, 2192, 2191, 2192, 2192, 2192, ... 
 # Resampling results across tuning parameters:
 # 
-#   mtry  Accuracy   Kappa     
-#     2   0.8726911  0.01630407
-#    36   0.9683870  0.85560386
-#    71   0.9733101  0.88246752
-#   106   0.9737216  0.88456372
-#   141   0.9749511  0.89045073
-#   176   0.9745413  0.88863089
-#   211   0.9733084  0.88305851
-#   245   0.9737182  0.88498361
-#   280   0.9720755  0.87744204
-#   315   0.9720755  0.87744204
-#   350   0.9728968  0.88054653
-#   385   0.9712508  0.87334843
-#   420   0.9716623  0.87535556
-#   455   0.9704294  0.86932190
-#   490   0.9696064  0.86605487
+#   mtry  ROC        Sens         Spec     
+#     2   0.9689613  0.009576613  1.0000000
+#    36   0.9820421  0.847177419  0.9863318
+#    71   0.9822760  0.901411290  0.9839733
+#   106   0.9797329  0.908064516  0.9835016
+#   141   0.9816982  0.917540323  0.9835016
+#   176   0.9821858  0.914314516  0.9835016
+#   211   0.9791046  0.907862903  0.9830299
+#   245   0.9797244  0.911088710  0.9830299
+#   280   0.9792163  0.901411290  0.9825582
+#   315   0.9770951  0.901411290  0.9825582
+#   350   0.9715289  0.901411290  0.9835016
+#   385   0.9732403  0.894959677  0.9825582
+#   420   0.9714728  0.898185484  0.9825582
+#   455   0.9747380  0.888508065  0.9825582
+#   490   0.9724808  0.888508065  0.9816148
 # 
-# Accuracy was used to select the optimal model using the largest value.
-# The final value used for the model was mtry = 141.
+# ROC was used to select the optimal model using the largest value.
+# The final value used for the model was mtry = 71.
 ```
 # Save Model
 ```{r}
@@ -184,7 +184,7 @@ saveRDS(azmRF, file = "azmRF_model") #save model
 ```{r}
 predictedAR <- predict(azmRF, azmDS$testing) #full predictions
 mean(predictedAR == azmDS$testing$azm_sr) #assess full model accuracy
-table(predictedAR, azmDS$testing$azm_sr) #confusion matrix
+confusionMatrix(predictedAR, azmDS$testing$azm_sr) #confusion matrix
 ggplot2::ggplot(azmRF)
 ```
 
