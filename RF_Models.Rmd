@@ -10,22 +10,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Libraries
-```{r warning = FALSE, message=FALSE, echo=FALSE}
-#install packages only if you have not already done so 
-list.of.packages <- c("randomForest", "ggplot2", "dplyr", "caret",
-                      "readr", "e1071", "mlbench", "slam","parallel", "doParallel")
-new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
-#library packages
-for (pkg in c("randomForest", "ggplot2", "dplyr",
-              "caret", "readr","parallel", "doParallel")) {
-  library(pkg, character.only = TRUE)
-  }
+```{r echo=FALSE}
+library(tidyverse)
+library(caret)
 ```
 
 
 # Data Cleaning
-```{r}
+```{r, eval=FALSE}
 # read metadata.csv with only "Sample_ID" and "*_sr" features
 metadata <- read_csv("./metadata.csv") %>% 
   select(Sample_ID,(matches("_sr$")))
@@ -77,7 +69,7 @@ unitigs(unitigs_cip)
 
 
 # Function to create Training and Test datasets
-```{r}
+```{r, eval=FALSE}
 createDS <- function(csvname, percent=0.7, seed=05101929){
   stopifnot(is.character(csvname))
   
@@ -114,7 +106,7 @@ tibble::glimpse(azmDS$training[1:6])
 ```
 
 # Function to Train and Fit Random Forest Model (USE CAUTION)!!!
-```{r}
+```{r, eval=FALSE}
 trainMethods <- function(training, outcome,
                          seed=05101929, workers = 0, ...){
   stopifnot(is.object(training), is.character(outcome))
@@ -175,9 +167,16 @@ azmRF
 # ROC was used to select the optimal model using the largest value.
 # The final value used for the model was mtry = 71.
 ```
-# Save Model
+# Model Tuning on `mtry`
 ```{r}
-saveRDS(azmRF, file = "azmRF_model") #save model
+mBest <- azmRF$bestTune[[1]]
+tBest <- -1
+while(tBest != mBest){
+  mGrid <- var_seq(p = mBest, classification = TRUE, len = 15) %>% expand_grid(mtry = ., s = 0)
+  
+  azmRF <- trainMethods(azmDS$training, "azm_sr", method = "parRF", workers = 8, tuneGrid = mGrid)
+  tBest <- azmRF$bestTune[[1]]
+}
 ```
 
 # Assess model accuracy
@@ -185,48 +184,15 @@ saveRDS(azmRF, file = "azmRF_model") #save model
 predictedAR <- predict(azmRF, azmDS$testing) #full predictions
 mean(predictedAR == azmDS$testing$azm_sr) #assess full model accuracy
 confusionMatrix(predictedAR, azmDS$testing$azm_sr) #confusion matrix
-ggplot2::ggplot(azmRF)
 ```
 
-# Import and Split Data
+# Plots
 ```{r}
-# #Import
-# ## May require using "data_clean_script.R" to create "unitigs_cip.csv" in local directory
-# cipData <- read_csv("./unitigs_cip.csv", col_types = cols(.default = col_factor(NULL))) %>% 
-#   select_if(sapply(., nlevels) > 1)
-# #Split
-# set.seed(05101929)
-# index <- cipData$cip_sr %>% 
-#   createDataPartition(times = 1, p = 0.7, list = FALSE)
-# 
-# cipTrain <- cipData %>% slice(index)
-# cipTest <- cipData %>% slice(-index)
+plot.train(azmRF) #graphs Tuning Accuracy
+varImp(azmRF) %>% dotPlot() #graphs Importance
 ```
 
-# Full Model Training and Fit (DO NOT RUN!!!!)
+# Save Model
 ```{r}
-# trCtrl <- caret::trainControl("cv", number = 10, #cross-validation
-#                        allowParallel = TRUE) #parallelization
-# 
-# # Select Cores for Parallelization
-# cl <- parallel::makePSOCKcluster(4) #set number of cores
-# doParallel::registerDoParallel(cl)
-# set.seed(05101929)
-# 
-# #Model Fit
-# modelRF <- caret::train(
-#   azm_sr~., data = azm$training, method = "parRF",
-#   tuneGrid = tunegrid,
-#   trControl = trCtrl,
-#   importance = TRUE
-#   )
-# #After fitting model
-# 
-# saveRDS(modelRF, file = "azmRF_model2") #save full model
-# predictedAR <- modelRF %>% predict(azm$testing) #full predictions
-# parallel::stopCluster(cl)
-# mean(predictedAR == azm$testing$azm_sr) #assess full model accuracy
-# 
-# # Best tuning parameter
-# modelRF$bestTune
+saveRDS(azmRF, file = "azmRF_model") #save model
 ```
