@@ -1,0 +1,64 @@
+---
+title: "Antimicrobial Resistance Draft"
+author: "Arvon Clemons II, Ashika Mani, Mark Vater, Valerio Tonelli"
+date: "9/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+#libraries
+library(caret)
+library(dplyr)
+
+# Create list of models
+RF <- lapply(list.files(pattern = "RF_model"), readRDS) %>%
+  setNames(na.omit((stringr::str_extract(list.files(), pattern = "[:alpha:]+RF_model$"))))
+
+EN <- lapply(list.files(pattern = "EN_model"), readRDS) %>%
+  setNames(na.omit((stringr::str_extract(list.files(), pattern = "[:alpha:]+EN_model$"))))
+
+SVM <- lapply(list.files(pattern = "SVM_model"), readRDS) %>%
+  setNames(na.omit((stringr::str_extract(list.files(), pattern = "[:alpha:]+SVM_model$"))))
+
+XGB <- lapply(list.files(pattern = "XGB_model"), readRDS) %>%
+  setNames(na.omit((stringr::str_extract(list.files(), pattern = "[:alpha:]+XGB_model$"))))
+
+# createDS()
+createDS <- function(csvname, percent=0.7, seed=05101929){
+  stopifnot(is.character(csvname))
+  
+  '%>%' <- tidyr::'%>%'
+  
+#Import and create Training/Testing datasets
+rfData <- readr::read_csv(csvname, col_types = readr::cols(.default = readr::col_factor(NULL))) %>% 
+  dplyr::select_if(sapply(., nlevels) > 1)
+#Split
+set.seed(seed)
+index <- dplyr::select(rfData,dplyr::matches(stringr::str_extract(unlist(stringr::str_split(csvname, "_"))[2],"^[[:alpha:]]+"))) %>% 
+  unlist() %>% 
+  caret::createDataPartition(times = 1, p = percent, list = FALSE)
+
+dfTrain <- rfData %>% dplyr::slice(index) #training dataset
+dfTest <- rfData %>% dplyr::slice(-index) #testing dataset
+
+#return datasets
+dataSets <- list(training = dfTrain, testing = dfTest)
+invisible(dataSets)
+}
+azmDS <- createDS("./unitigs_azm.csv")
+cfxDS <- createDS("./unitigs_cfx.csv")
+cipDS <- createDS("./unitigs_cip.csv")
+```
+
+```{r, eval=FALSE}
+predictedAR <- predict(RF$azmRF_model, azmDS$testing) #full predictions
+mean(predictedAR == azmDS$testing$azm_sr) #assess full model accuracy
+confusionMatrix(predictedAR, azmDS$testing$azm_sr) #confusion matrix
+plot.train(RF$azmRF_model) #graphs Tuning Accuracy
+varImp(RF$azmRF_model) %>% dotPlot() #graphs Importance
+```
+

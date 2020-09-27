@@ -121,7 +121,7 @@ azmROC <- pROC::roc(predictor=azmProb$pos,
                levels=rev(levels(azmDS$testing$azm_sr)))
 azmROC$auc
 
-caret::dotPlot(caret::varImp(azmXGB), )
+caret::dotPlot(caret::varImp(azmXGB))
 ```
 
 # Save Model
