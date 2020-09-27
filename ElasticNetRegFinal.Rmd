@@ -107,7 +107,7 @@ trainMethods <- function(training, outcome,
   stopifnot(is.object(training), is.character(outcome))
 trCtrl <- caret::trainControl(method = "cv", number = 10, #cross-validation
                        allowParallel = TRUE, #parallelization
-                       summaryFunction = twoClassSummary,
+                       summaryFunction = caret::twoClassSummary,
                        classProbs = TRUE) #class probabilities
 
 cl <- parallel::makePSOCKcluster(ifelse(workers, workers, parallel::detectCores())) #set number of cores
