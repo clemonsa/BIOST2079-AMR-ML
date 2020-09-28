@@ -142,11 +142,13 @@ ypred2 <- predict(caretFit, azmDS$testing)
 
 Now that it is confirmed that `caret` can achieve the same results will implement below wrapper function:
 ```{r}
-trainMethods <- function(training, outcome, method,
-                         seed=05101929, workers = 0, number=10, ...){
-  stopifnot(is.character(method), is.object(training), is.character(outcome))
-trCtrl <- caret::trainControl("cv", number = number, #cross-validation
-                       allowParallel = TRUE) #parallelization
+trainMethods <- function(training, outcome,
+                         seed=05101929, workers = 0, ...){
+  stopifnot(is.object(training), is.character(outcome))
+trCtrl <- caret::trainControl(method = "cv", number = 10, #cross-validation
+                       allowParallel = TRUE, #parallelization
+                       summaryFunction = caret::twoClassSummary,
+                       classProbs = TRUE) #class probabilities
 
 cl <- parallel::makePSOCKcluster(ifelse(workers, workers, parallel::detectCores())) #set number of cores
 doParallel::registerDoParallel(cl)
@@ -155,8 +157,9 @@ set.seed(seed)
 #training and fitting model
   modelRF <- caret::train(as.formula(
     paste0(outcome,"~.")),
-    data=training, method=method,
+    data=training,
     trControl = trCtrl,
+    metric = "ROC",
     importance = T,
     ...
   )
