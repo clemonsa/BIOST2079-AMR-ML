@@ -3,8 +3,8 @@ title: "Antimicrobial Resistance Draft"
 author: "Arvon Clemons II, Ashika Mani, Mark Vater, Valerio Tonelli"
 date: "9/27/2020"
 output:
-  html_document: default
   word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, include=FALSE, eval=FALSE}
 # read metadata.csv with only "Sample_ID" and "*_sr" features
-metadata <- read_csv("./metadata.csv") %>% 
+metadata <- readr::read_csv("./metadata.csv") %>% 
   select(Sample_ID,(matches("_sr$")))
 
 # read antibiotic resistance associated unitigs
