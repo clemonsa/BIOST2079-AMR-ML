@@ -2,17 +2,60 @@
 title: "Antimicrobial Resistance Draft"
 author: "Arvon Clemons II, Ashika Mani, Mark Vater, Valerio Tonelli"
 date: "9/27/2020"
-output: html_document
+output:
+  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r, include=FALSE, eval=FALSE}
+# read metadata.csv with only "Sample_ID" and "*_sr" features
+metadata <- read_csv("./metadata.csv") %>% 
+  select(Sample_ID,(matches("_sr$")))
+
+# read antibiotic resistance associated unitigs
+unitigs_azm <- read_table2("azm_sr_gwas_filtered_unitigs.Rtab")
+unitigs_cfx <- read_table2("cfx_sr_gwas_filtered_unitigs.Rtab")
+unitigs_cip <- read_table2("cip_sr_gwas_filtered_unitigs.Rtab")
+
+#Function to transpose unitigs table, join metadata, then create .csv file
+unitigs <- function(unitig){
+  
+  # deparse + substitute combo to extract object name
+  unitig_name <- deparse(substitute(unitig))
+  
+  '%>%' <- tidyr::'%>%'
+  
+  unitig %>%
+    # transpose
+    tidyr::pivot_longer(-pattern_id, "Sample_ID", "value") %>% 
+    tidyr::pivot_wider(Sample_ID, pattern_id) %>%
+    # join relevant antibiotic metadata
+    dplyr::inner_join(dplyr::select(metadata, "Sample_ID", dplyr::matches(stringr::str_extract(unitig_name, "[[:alpha:]]+$"))), by = "Sample_ID") %>% 
+    dplyr::select(dplyr::last_col(), dplyr::everything(), -"Sample_ID") %>% 
+    # rename unitigs to format "geneX" where X is a positive integer
+    data.table::setnames(., old = names(.[2:length(.)]), new = paste0('gene', seq_along(.[2:length(.)])), skip_absent = T) %>%
+    # relabel into "neg" and "pos"
+    mutate(across(where(is.numeric), ~if_else(. == 0, "neg", "pos"))) %>% 
+    tidyr::drop_na() %>% 
+    # create .csv file
+    readr::write_csv(path=paste0('./', stringr::str_extract(unitig_name,"[[:alpha:]]+[_][[:alpha:]]+"), '.csv'))
+}
+
+# Use 'unitigs' function to create .csv files
+unitigs(unitigs_azm)
+unitigs(unitigs_cfx)
+unitigs(unitigs_cip)
+```
+
 ```{r, include=FALSE}
 #libraries
 library(caret)
 library(dplyr)
+library(ggpubr)
 
 # Create list of models
 RF <- lapply(list.files(pattern = "RF_model"), readRDS) %>%
@@ -53,12 +96,311 @@ azmDS <- createDS("./unitigs_azm.csv")
 cfxDS <- createDS("./unitigs_cfx.csv")
 cipDS <- createDS("./unitigs_cip.csv")
 ```
+# Introduction
 
-```{r, eval=FALSE}
+Antibiotic resistance is the property of bacteria to resist the effects of antibiotic compounds, which occurs when resistant bacteria survive exposure and continue to multiply.1 This occurrence is not only a large financial burden but poses a large hazard to human health as well. According to the Centers for Disease Control and Prevention (CDC), the economic impact of antibiotic resistance may account for as much as $20 billion in direct healthcare costs and \$35 billion in associated consequences annually in the US.2 Furthermore, there are at least 23,000 Antibiotic resistant-related deaths occurring each year as well as at least 2,000,000 illnessess.2 Therefore, this issue is of vital importance from both a public health and financial standpoint. 
+
+In this analysis, we will use a dataset that has been assembled from a variety of publications on bacterial resistance and is freely available on Kaggle. We will assess the genetic variations associated with resistance to three different antibiotics that are widely used for the treatment of gonorrhea (azithromycin, ciprofloxacin, and cefixime). These segments of DNA are known as unitigs and are shared by the Neisseria gonorrhoeae strains that are included in this dataset. The dataset has about 3000 data entries for each antibiotic tested, with one having approximately 300 unitigs, a second one having approximately 500 unitigs, and the last one having over 3000 unitigs. We will be looking at using various statistical approaches to create machine learning algorithms to best predict the genetic background that determines resistance to these antibiotics. The models that we anticipate using will include elastic net logistic regression, XGBoost, random forest, and support vector machine. Prediction models outcomes will then be tested for their performance to draw conclusions from the comparative analyses.
+
+# Data Description
+
+A dataset of multiple unitig sequences associated with antibiotic resisistance in *Neisseria gonorrhea*, outcomes are classified upon whether resistance has been identified into two classes ("Positive", "Negative).
+```{r, echo=FALSE}
+knitr::kable(data.frame(Observations = c(nrow(azmDS$training) + nrow(azmDS$testing), nrow(cfxDS$training) + nrow(cfxDS$testing), nrow(cipDS$training) + nrow(cipDS$testing)),
+           Features = c(ncol(azmDS$training) - 2, ncol(cfxDS$training) - 2, ncol(cipDS$training) - 2),
+           row.names = c("AZM", "CFX", "CIP")
+           ), align = c("c", "c"), caption = "Data Description")
+```
+
+
+# Data Analysis
+
+Four supervised classification methods were used: (1) Elastic Net(EN), (2) Support Vector Machine(SVM), (3) Extreme Gradient Boosting(XGB), (4) Random Forest(RF). All methods were implemented through the `caret` `r packageVersion("caret")` package. We used ROC as the metric for selecting the optimal threshold in each model.
+
+## Elastic Net
+
+### Azithromycin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(EN$azmEN_model)
+knitr::kable(EN$azmEN_model$bestTune, caption = "AZM Elastic Net tuned parameters")
+```
+
+#### Final Model Assessment
+
+```{r, echo=FALSE}
+predictedAR <- predict(EN$azmEN_model, azmDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$table, caption = "Azithromycin Elastic Net Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$byClass[c(1:4, 11)], caption = "Azithromycin Elastic Net Perfomance Statistics") # Sensitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+azmEN_tune <- plot.train(EN$azmEN_model) #graphs Tuning Accuracy
+azmEN_Imp <- varImp(EN$azmEN_model) %>% dotPlot() #graphs Importance
+```
+
+### Cefoxitin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(EN$cfxEN_model)
+knitr::kable(EN$cfxEN_model$bestTune, caption = "CFX Elastic Net tuned parameters")
+```
+
+#### Final Model Assessment
+
+```{r, echo=FALSE}
+predictedAR <- predict(EN$cfxEN_model, cfxDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$table, caption = "Cefoxitin Elastic Net Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$byClass[c(1:4, 11)], caption = "Cefoxitin Elastic Net Performance Statistics") # Sensitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cfxEN_tune <- plot.train(EN$cfxEN_model) #graphs Tuning Accuracy
+cfxEN_Imp <- varImp(EN$cfxEN_model) %>% dotPlot() #graphs Importance
+```
+
+
+### Ciprofloxacin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(EN$cipEN_model)
+knitr::kable(EN$cipEN_model$bestTune, caption = "CIP Elastic Net tuned parameters")
+```
+
+#### Final Model Assessment
+
+```{r, echo=FALSE}
+predictedAR <- predict(EN$cipEN_model, cipDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$table, caption = "Ciprofloxacin Elastic Net Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$byClass[c(1:4, 11)], caption = "Ciprofloxacin Elastic Net Performance Statistics") # Sensitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cipEN_tune <- plot.train(EN$cipEN_model) #graphs Tuning Accuracy
+cipEN_Imp <- varImp(EN$cipEN_model) %>% dotPlot() #graphs Importance
+```
+
+### Hyperparameter Tuning Comparison
+
+```{r, echo = FALSE, fig.cap = "ROC vs Regularization Tuning: AZM, CFX, and CIP from top to bottom"}
+gridExtra::grid.arrange(azmEN_tune, cfxEN_tune, cipEN_tune)
+```
+
+## Support Vector Machines
+
+### Azithromycin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(SVM$azmSVM_model)
+knitr::kable(SVM$azmSVM_model$bestTune, caption = "AZM Support Vector Machines tuned parameters")
+```
+
+#### Final Model AssessmSVMt
+
+```{r, echo=FALSE, error = TRUE}
+predictedAR <- predict(SVM$azmSVM_model, azmDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$table, caption = "Azithromycin Support Vector Machines Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$byClass[c(1:4, 11)], caption = "Azithromycin Support Vector Machines Performance Statistics") # Sensitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+azmSVM_tune <- plot.train(SVM$azmSVM_model) #graphs Tuning Accuracy
+#azmSVM_Imp <- varImp(SVM$azmSVM_model) %>% dotPlot() #graphs Importance
+```
+
+### Cefoxitin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(SVM$cfxSVM_model)
+knitr::kable(SVM$cfxSVM_model$bestTune, caption = "CFX Support Vector Machines tuned parameters")
+```
+
+#### Final Model AssessmSVMt
+
+```{r, echo=FALSE}
+predictedAR <- predict(SVM$cfxSVM_model, cfxDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$table, caption = "Cefoxitin Support Vector Machines Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$byClass[c(1:4, 11)], caption = "Cefoxitin Support Vector Machines Performance Statistics") # SSVMsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cfxSVM_tune <- plot.train(SVM$cfxSVM_model) #graphs Tuning Accuracy
+#cfxSVM_Imp <- varImp(SVM$cfxSVM_model) %>% dotPlot() #graphs Importance
+```
+
+
+### Ciprofloxacin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(SVM$cipSVM_model)
+knitr::kable(SVM$cipSVM_model$bestTune, caption = "CIP Support Vector Machines tuned parameters")
+```
+
+#### Final Model AssessmSVMt
+
+```{r, echo=FALSE}
+predictedAR <- predict(SVM$cipSVM_model, cipDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$table, caption = "Ciprofloxacin Support Vector Machines Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$byClass[c(1:4, 11)], caption = "Ciprofloxacin Support Vector Machines Performance Statistics") # SSVMsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cipSVM_tune <- plot.train(SVM$cipSVM_model) #graphs Tuning Accuracy
+#cipSVM_Imp <- varImp(SVM$cipSVM_model) %>% dotPlot() #graphs Importance
+```
+
+### Hyperparameter Tuning Comparison
+
+```{r, echo = FALSE, fig.cap="ROC vs Cost: AZM, CFX, and CIP from top to bottom"}
+gridExtra::grid.arrange(azmSVM_tune, cfxSVM_tune, cipSVM_tune)
+```
+
+## Extreme Gradient Boosting
+
+### Azithromycin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(XGB$azmXGB_model)
+knitr::kable(XGB$azmXGB_model$bestTune, caption = "AZM Extreme Gradient Boosting tuned parameters")
+```
+
+#### Final Model AssessmXGBt
+
+```{r, echo=FALSE, warning=FALSE}
+predictedAR <- predict(XGB$azmXGB_model, azmDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$table, caption = "Azithromycin Extreme Gradient Boost Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$byClass[c(1:4, 11)], caption = "Azithromycin Extreme Gradient Boost Performance Statistics") # SXGBsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+azmXGB_tune <- plot.train(XGB$azmXGB_model) #graphs Tuning Accuracy
+azmXGB_Imp <- varImp(XGB$azmXGB_model) %>% dotPlot() #graphs Importance
+```
+
+### Cefoxitin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(XGB$cfxXGB_model)
+knitr::kable(XGB$cfxXGB_model$bestTune, caption = "CFX Extreme Gradient Boosting tuned parameters")
+```
+
+#### Final Model AssessmXGBt
+
+```{r, echo=FALSE, warning=FALSE}
+predictedAR <- predict(XGB$cfxXGB_model, cfxDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$table, caption = "Cefoxitin Extreme Gradient Boost Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$byClass[c(1:4, 11)], caption = "Cefoxitin Extreme Gradient Boost Performance Statistics") # SXGBsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cfxXGB_tune <- plot.train(XGB$cfxXGB_model) #graphs Tuning Accuracy
+cfxXGB_Imp <- varImp(XGB$cfxXGB_model) %>% dotPlot() #graphs Importance
+```
+
+
+### Ciprofloxacin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(XGB$cipXGB_model)
+knitr::kable(XGB$cipXGB_model$bestTune, caption = "CIP Extreme Gradient Boosting tuned parameters")
+```
+
+#### Final Model AssessmXGBt
+
+```{r, echo=FALSE, warning=FALSE}
+predictedAR <- predict(XGB$cipXGB_model, cipDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$table, caption = "Ciprofloxacin Extreme Gradient Boost Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$byClass[c(1:4, 11)], caption = "Ciprofloxacin Extreme Gradient Boost Performance Statistics") # SXGBsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cipXGB_tune <- plot.train(XGB$cipXGB_model) #graphs Tuning Accuracy
+cipXGB_Imp <- varImp(XGB$cipXGB_model) %>% dotPlot() #graphs Importance
+```
+
+### Hyperparameter Tuning Comparison
+
+```{r, echo = FALSE, fig.cap = "ROC vs Boosting Iterations: AZM, CFX, and CIP from top to bottom"}
+azmXGB_tune
+cfxXGB_tune
+cipXGB_tune
+```
+
+## Random Forest
+
+### Azithromycin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(RF$azmRF_model)
+knitr::kable(RF$azmRF_model$bestTune, caption = "AZM Random Forest tuned parameters")
+```
+
+#### Final Model AssessmRFt
+
+```{r, echo=FALSE}
 predictedAR <- predict(RF$azmRF_model, azmDS$testing) #full predictions
-mean(predictedAR == azmDS$testing$azm_sr) #assess full model accuracy
-confusionMatrix(predictedAR, azmDS$testing$azm_sr) #confusion matrix
-plot.train(RF$azmRF_model) #graphs Tuning Accuracy
-varImp(RF$azmRF_model) %>% dotPlot() #graphs Importance
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$table, caption = "Azithromycin Random Forest Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, azmDS$testing$azm_sr)$byClass[c(1:4, 11)], caption = "Azithromycin Random Forest Performance Statistics") # SRFsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+azmRF_tune <- plot.train(RF$azmRF_model) #graphs Tuning Accuracy
+azmRF_Imp <- varImp(RF$azmRF_model) %>% dotPlot() #graphs Importance
+```
+
+### Cefoxitin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(RF$cfxRF_model)
+knitr::kable(RF$cfxRF_model$bestTune, caption = "CFX Random Forest tuned parameters")
+```
+
+#### Final Model AssessmRFt
+
+```{r, echo=FALSE}
+predictedAR <- predict(RF$cfxRF_model, cfxDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$table, caption = "Cefoxitin Random Forest Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cfxDS$testing$cfx_sr)$byClass[c(1:4, 11)], caption = "Cefoxitin Random Forest Performance Statistics") # SRFsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cfxRF_tune <- plot.train(RF$cfxRF_model) #graphs Tuning Accuracy
+cfxRF_Imp <- varImp(RF$cfxRF_model) %>% dotPlot() #graphs Importance
+```
+
+
+### Ciprofloxacin
+
+#### Training
+
+```{r, echo = FALSE}
+confusionMatrix.train(RF$cipRF_model)
+knitr::kable(RF$cipRF_model$bestTune, caption = "CIP Random Forest tuned parameters")
+```
+
+#### Final Model AssessmRFt
+
+```{r, echo=FALSE}
+predictedAR <- predict(RF$cipRF_model, cipDS$testing) #full predictions
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$table, caption = "Ciprofloxacin Random Forest Confusion Matrix") #confusion matrix
+knitr::kable(confusionMatrix(predictedAR, cipDS$testing$cip_sr)$byClass[c(1:4, 11)], caption = "Ciprofloxacin Random Forest Performance Statistics") # SRFsitivity, Specificity, Pos Pred Value, Neg Pred value, Balanced Accuracy
+cipRF_tune <- plot.train(RF$cipRF_model) #graphs Tuning Accuracy
+cipRF_Imp <- varImp(RF$cipRF_model) %>% dotPlot() #graphs Importance
+```
+
+### Hyperparameter Tuning Comparison
+
+```{r, echo = FALSE, fig.cap = "ROC vs Amount of Predictors: AZM, CFX, and CIP from top to bottom"}
+gridExtra::grid.arrange(azmRF_tune, cfxRF_tune, cipRF_tune)
+```
+
+## Parameter Importance
+
+### Azithromycin
+
+```{r, echo = FALSE, fig.cap = "AZM Predictor Importance Comparison"}
+ggarrange(azmEN_Imp, azmXGB_Imp, azmRF_Imp,labels = c("EN", "XGB", "RF"))
+```
+
+
+### Cefoxitin
+
+```{r, echo = FALSE, fig.cap = "CFX Predictor Importance Comparison"}
+ggarrange(cfxEN_Imp, cfxXGB_Imp, cfxRF_Imp,labels = c("EN", "XGB", "RF"))
+```
+
+### Ciprofloxacin
+
+```{r, echo = FALSE, fig.cap = "CIP Predictor Importance Comparison"}
+ggarrange(cipEN_Imp, cipXGB_Imp, cipRF_Imp,labels = c("EN", "XGB", "RF"))
 ```
 
